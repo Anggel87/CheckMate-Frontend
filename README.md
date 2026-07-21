@@ -1,59 +1,42 @@
-# CheckMateFrontend
+CheckMate Frontend
+Proyecto desarrollado con Angular 21 corriendo sobre Docker. No se requiere tener Node.js o Angular CLI instalados localmente, únicamente Docker Desktop.
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.2.19.
+Requisitos Previos
+Docker Desktop instalado y corriendo.
 
-## Development server
+Git
 
-To start a local development server, run:
+Iniciar el Proyecto por Primera Vez
+Clonar el repositorio:
 
-```bash
-ng serve
-```
+Bash
+git clone <URL_DEL_REPOSITORIO>
+cd CheckMate-Frontend
+Levantar el entorno de desarrollo:
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Bash
+docker compose up --build
+Acceder a la aplicación:
+Abre tu navegador en http://localhost:4200
 
-## Code scaffolding
+Comandos de Uso Diario
+Encender la aplicación
+Bash
+docker compose up
+Detener la aplicación
+Presiona Ctrl + C en la terminal, o en otra ventana ejecuta:
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+Bash
+docker compose down
+Gestión de Dependencias y Comandos CLI
+Todos los comandos de npm y ng deben ejecutarse dentro del contenedor con la aplicación encendida:
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Instalar una nueva librería
+Bash
+docker compose exec checkmate-app npm install <nombre-del-paquete>
+Generar un componente, servicio o módulo
+Bash
+docker compose exec checkmate-app npx ng g c componentes/<nombre-componente>
+Reconstruir la imagen
+Bash
+docker compose up --build
