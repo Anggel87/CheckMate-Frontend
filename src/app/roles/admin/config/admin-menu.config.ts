@@ -1,0 +1,26 @@
+import { NavigationItem } from '../../../core/models/menu-item.model';
+
+export const ADMIN_MENU: NavigationItem[] = [
+  { label: 'Dashboard', icon: 'fa-solid fa-house', route: '/admin/dashboard', permission: 'dashboard.view' },
+  { label: 'Usuarios', icon: 'fa-solid fa-user-shield', route: '/admin/users', permission: 'users.view' },
+  { label: 'Alumnos', icon: 'fa-solid fa-user-graduate', route: '/admin/students', permission: 'students.view' },
+  { label: 'Profesores', icon: 'fa-solid fa-chalkboard-user', route: '/admin/teachers', permission: 'teachers.view' },
+  { label: 'Carreras', icon: 'fa-solid fa-building-columns', route: '/admin/careers', permission: 'careers.view' },
+  { label: 'Grupos', icon: 'fa-solid fa-users', route: '/admin/groups', permission: 'groups.view' },
+  { label: 'Materias', icon: 'fa-solid fa-book-open', route: '/admin/subjects', permission: 'subjects.view' },
+  { label: 'Horarios', icon: 'fa-solid fa-calendar-days', route: '/admin/schedules', permission: 'schedules.view' },
+  { label: 'Periodos', icon: 'fa-solid fa-calendar-week', route: '/admin/academic-periods', permission: 'academic-periods.view' },
+  { label: 'Asistencias', icon: 'fa-solid fa-calendar-check', route: '/admin/attendance', permission: 'attendance.view' },
+  { label: 'Reglas de asistencia', icon: 'fa-solid fa-sliders', route: '/admin/attendance-settings', permission: 'attendance-settings.view' },
+  { label: 'Dispositivos NFC', icon: 'fa-solid fa-microchip', route: '/admin/nfc-devices', permission: 'nfc-devices.view' },
+  { label: 'Tarjetas NFC', icon: 'fa-solid fa-id-card', route: '/admin/nfc-cards', permission: 'nfc-cards.view' },
+  { label: 'Reclamos', icon: 'fa-solid fa-message', route: '/admin/claims', permission: 'claims.view' },
+  { label: 'Justificantes', icon: 'fa-solid fa-file-circle-question', route: '/admin/justifications', permission: 'justifications.view' },
+  { label: 'Reportes', icon: 'fa-solid fa-chart-simple', route: '/admin/reports', permission: 'reports.view' },
+  { label: 'Estadísticas', icon: 'fa-solid fa-chart-line', route: '/admin/statistics', permission: 'statistics.view' },
+  { label: 'Notificaciones', icon: 'fa-solid fa-bell', route: '/admin/notifications', permission: 'notifications.view' },
+  { label: 'Emergencias', icon: 'fa-solid fa-shield-halved', route: '/admin/emergencies', permission: 'emergencies.view' },
+  { label: 'Incidencias', icon: 'fa-solid fa-triangle-exclamation', route: '/admin/incidents', permission: 'incidents.view' },
+  { label: 'Auditoría', icon: 'fa-solid fa-clipboard-list', route: '/admin/audit', permission: 'audit.view' },
+  { label: 'Configuración', icon: 'fa-solid fa-gear', route: '/admin/settings', permission: 'settings.view' },
+];
