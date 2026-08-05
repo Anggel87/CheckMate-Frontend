@@ -1,0 +1,18 @@
+<section id="features" class="landing-features" data-landing-section aria-labelledby="features-title">
+  <div class="landing-features__inner">
+    <div class="landing-features__heading" data-landing-animate>
+      <span>Caracteristicas principales</span>
+      <h2 id="features-title">Todo el control de asistencia en un portal web</h2>
+      <p>
+        CheckMate conecta identificacion, administracion academica y seguimiento
+        de incidencias en una experiencia clara para cada rol.
+      </p>
+    </div>
+
+    <div class="landing-features__grid">
+      @for (feature of features; track feature.title) {
+        <app-landing-feature-card [feature]="feature" data-landing-animate />
+      }
+    </div>
+  </div>
+</section>

@@ -1,0 +1,13 @@
+import { Component, Input } from '@angular/core';
+import { RouterLink } from '@angular/router';
+
+@Component({
+  selector: 'app-landing-cta',
+  standalone: true,
+  imports: [RouterLink],
+  templateUrl: './landing-cta.component.html',
+  styleUrl: './landing-cta.component.css',
+})
+export class LandingCtaComponent {
+  @Input({ required: true }) loginRoute = '/auth/login';
+}

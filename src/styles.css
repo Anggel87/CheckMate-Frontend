@@ -141,8 +141,8 @@ app-root {
 }
 
 .checkmate-sidebar__brand {
-  gap: 12px;
-  min-height: 48px;
+  justify-content: center;
+  min-height: 72px;
   margin-bottom: 16px;
 }
 
@@ -152,6 +152,13 @@ app-root {
   width: 42px;
   height: 42px;
   border-radius: 12px;
+}
+
+.checkmate-sidebar__brand img {
+  width: 72px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 0;
 }
 
 .checkmate-sidebar__brand strong,
@@ -907,6 +914,10 @@ app-root {
   border-radius: var(--checkmate-radius-md);
 }
 
+.notification-item > div {
+  min-width: 0;
+}
+
 .notification-item:hover {
   background: var(--checkmate-secondary);
 }
@@ -931,7 +942,10 @@ app-root {
 }
 
 .notification-item strong {
+  overflow: hidden;
   font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notification-item p,
@@ -943,6 +957,10 @@ app-root {
 
 .dropdown-empty {
   margin: 12px;
+}
+
+.notification-item p {
+  overflow-wrap: anywhere;
 }
 
 .checkmate-form-field {
@@ -1424,6 +1442,328 @@ app-root {
   }
 }
 
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-soft-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+[data-landing-hero],
+[data-landing-animate],
+[data-landing-visual] {
+  animation: landing-fade-up 520ms ease-out both;
+}
+
+[data-landing-float] {
+  animation: landing-soft-float 2.8s ease-in-out infinite;
+}
+
+.landing-process .phone {
+  position: absolute;
+  right: -42px;
+  bottom: -46px;
+  width: clamp(232px, 22vw, 264px);
+  padding: 9px;
+  color: var(--checkmate-text-primary);
+  background: linear-gradient(145deg, #27282c 0%, #050505 52%, #1d1e22 100%);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 38px;
+  box-shadow:
+    0 30px 70px rgba(0, 0, 0, 0.28),
+    0 5px 12px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.72);
+}
+
+.landing-process .phone::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  z-index: 2;
+  width: 80px;
+  height: 21px;
+  background: #080808;
+  border-radius: 0 0 17px 17px;
+  transform: translateX(-50%);
+}
+
+.landing-process .phone__screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 9 / 18.8;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--checkmate-text-primary);
+  background: #f4f5f8;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 29px;
+}
+
+.landing-process .phone__statusbar {
+  position: absolute;
+  top: 13px;
+  right: 19px;
+  left: 19px;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.28);
+}
+
+.landing-process .phone__statusbar > span:last-child {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.landing-process .phone__cover {
+  position: relative;
+  flex: 0 0 41%;
+  overflow: hidden;
+}
+
+.landing-process .phone__cover > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 26%;
+  filter: saturate(0.82) brightness(0.93);
+  box-shadow: none;
+}
+
+.landing-process .phone__cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5, 11, 24, 0.3), rgba(9, 20, 44, 0.03) 44%, rgba(244, 245, 248, 0.96) 100%),
+    linear-gradient(110deg, rgba(0, 122, 255, 0.18), transparent 50%);
+}
+
+.landing-process .phone__brand {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: translateX(-50%);
+}
+
+.landing-process .phone__brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.landing-process .phone__brand strong {
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.landing-process .phone__brand small {
+  font-size: 7px;
+  line-height: 1.2;
+  opacity: 0.88;
+}
+
+.landing-process .phone__card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  width: calc(100% - 24px);
+  margin: -50px auto 0;
+  padding: 17px 15px 14px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 36px rgba(18, 25, 40, 0.14),
+    0 2px 7px rgba(18, 25, 40, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.landing-process .phone__eyebrow {
+  color: var(--checkmate-info);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.landing-process .phone__card h3 {
+  margin: 0;
+  color: #1d1d1f;
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+.landing-process .phone__card p {
+  margin: -2px 0 5px;
+  color: #4f4f55;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.landing-process .phone__field {
+  display: grid;
+  gap: 4px;
+}
+
+.landing-process .phone__field > span {
+  color: #36363a;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.landing-process .phone__field div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 39px;
+  padding: 0 9px;
+  color: #3a3a3c;
+  background: #f2f4f7;
+  border: 1px solid #eaebef;
+  border-radius: 10px;
+}
+
+.landing-process .phone__input-icon {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  place-items: center;
+  color: var(--checkmate-info);
+  background: rgba(0, 122, 255, 0.12);
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.landing-process .phone__field small {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: #6e6e73;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing-process .phone__field div > .fa-eye {
+  color: #65666c;
+  font-size: 11px;
+}
+
+.landing-process .phone__button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 41px;
+  margin-top: 5px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #050505, #1e1e21);
+  border-radius: 10px;
+  box-shadow: 0 7px 14px rgba(0, 0, 0, 0.16);
+}
+
+.landing-process .phone__button i {
+  display: inline-grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  color: #111111;
+  background: #ffffff;
+  border-radius: 999px;
+  font-size: 9px;
+}
+
+.landing-process .phone__secure {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  color: #7c7d83;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.landing-process .phone__secure i {
+  color: var(--checkmate-success);
+  font-size: 9px;
+}
+
+.landing-process .phone__home-indicator {
+  width: 74px;
+  height: 4px;
+  flex: 0 0 4px;
+  margin: auto auto 8px;
+  background: #1b1b1d;
+  border-radius: 999px;
+  opacity: 0.88;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-landing-hero],
+  [data-landing-animate],
+  [data-landing-visual],
+  [data-landing-float] {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .landing-process .phone {
+    right: 16px;
+    bottom: -52px;
+    width: min(240px, 44%);
+  }
+}
+
+@media (max-width: 560px) {
+  .landing-process .phone {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: min(232px, calc(100% - 32px));
+    margin: -66px auto 0;
+  }
+
+  .landing-process .phone__screen {
+    aspect-ratio: 9 / 19.2;
+  }
+}
+
 @media (max-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1562,13 +1902,22 @@ app-root {
 }
 
 .checkmate-sidebar__brand {
-  min-height: auto;
+  min-height: 104px;
   margin-bottom: 42px;
+  place-items: center;
 }
 
-.checkmate-sidebar__brand img,
 .checkmate-sidebar__collapse {
   display: none;
+}
+
+.checkmate-sidebar__brand img {
+  display: block;
+  width: min(118px, 60%);
+  height: auto;
+  max-height: 88px;
+  object-fit: contain;
+  border-radius: 0;
 }
 
 .checkmate-sidebar__brand strong {
@@ -2141,7 +2490,13 @@ app-root {
   }
 
   .checkmate-sidebar__brand {
+    min-height: 84px;
     margin-bottom: 32px;
+  }
+
+  .checkmate-sidebar__brand img {
+    width: min(96px, 60%);
+    max-height: 74px;
   }
 
   .checkmate-sidebar__brand strong {
@@ -2415,8 +2770,13 @@ app-root {
     width: min(280px, calc(100vw - 44px));
   }
 
-  .checkmate-sidebar__brand strong {
-    font-size: 28px;
+  .checkmate-sidebar__brand {
+    min-height: 78px;
+  }
+
+  .checkmate-sidebar__brand img {
+    width: 84px;
+    max-height: 66px;
   }
 
   .checkmate-sidebar-link {
@@ -2438,5 +2798,82 @@ app-root {
 
   .next-class-card {
     min-height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .checkmate-topbar {
+    min-height: 68px;
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .checkmate-topbar__left {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .checkmate-topbar__left strong {
+    max-width: calc(100vw - 190px);
+  }
+
+  .checkmate-topbar__actions {
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+
+  .checkmate-topbar .icon-button,
+  .profile-menu__button {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    font-size: 16px;
+  }
+
+  .notification-menu__panel {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    left: 12px;
+    z-index: 120;
+    width: auto;
+    max-height: calc(100dvh - 88px);
+    padding: 8px;
+    overflow: hidden;
+    border-radius: 14px;
+  }
+
+  .notification-menu__panel header {
+    gap: 8px;
+    padding: 8px 6px;
+  }
+
+  .notification-menu__panel header button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .notification-menu__list {
+    max-height: calc(100dvh - 230px);
+  }
+
+  .notification-item {
+    align-items: flex-start;
+    padding: 10px 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .checkmate-topbar__left strong {
+    max-width: calc(100vw - 176px);
+  }
+
+  .checkmate-topbar__actions {
+    gap: 6px;
+  }
+
+  .notification-menu__panel {
+    right: 8px;
+    left: 8px;
   }
 }

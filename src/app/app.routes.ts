@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { guestGuard } from './core/guards/guest.guard';
-import { roleRedirectGuard } from './core/guards/role-redirect.guard';
+import { LANDING_ROUTES } from './features/landing/landing.routes';
 import { ADMIN_ROUTES } from './roles/admin/admin.routes';
 import { CAREER_DIRECTOR_ROUTES } from './roles/career-director/career-director.routes';
 import { STUDENT_ROUTES } from './roles/student/student.routes';
@@ -9,12 +9,7 @@ import { TEACHER_ROUTES } from './roles/teacher/teacher.routes';
 import { TUTOR_TEACHER_ROUTES } from './roles/tutor-teacher/tutor-teacher.routes';
 
 export const routes: Routes = [
-  {
-    path: '',
-    pathMatch: 'full',
-    canActivate: [authGuard, roleRedirectGuard],
-    children: [],
-  },
+  ...LANDING_ROUTES,
   {
     path: 'auth',
     canActivate: [guestGuard],

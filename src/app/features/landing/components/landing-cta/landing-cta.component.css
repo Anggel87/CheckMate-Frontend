@@ -1,0 +1,83 @@
+:host {
+  display: block;
+}
+
+.landing-cta {
+  padding: clamp(56px, 8vw, 92px) clamp(18px, 5vw, 72px);
+  background: var(--checkmate-background);
+}
+
+.landing-cta__inner {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  gap: clamp(20px, 4vw, 42px);
+  align-items: center;
+  width: min(1180px, 100%);
+  min-height: 220px;
+  margin: 0 auto;
+  padding: clamp(26px, 5vw, 52px);
+  color: #ffffff;
+  background: #000000;
+  border-radius: var(--checkmate-radius-xl);
+  box-shadow: var(--checkmate-shadow-md);
+}
+
+.landing-cta img {
+  width: 116px;
+  height: auto;
+}
+
+.landing-cta__inner > div > span {
+  display: inline-block;
+  margin-bottom: 9px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.landing-cta h2 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.landing-cta__button {
+  color: #000000;
+  background: #ffffff;
+  white-space: nowrap;
+}
+
+.landing-cta__button span {
+  margin: 0;
+  color: #000000;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.landing-cta__button:hover {
+  background: var(--checkmate-hover);
+}
+
+@media (max-width: 900px) {
+  .landing-cta__inner {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .landing-cta img {
+    width: 92px;
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-cta__button {
+    width: 100%;
+  }
+}

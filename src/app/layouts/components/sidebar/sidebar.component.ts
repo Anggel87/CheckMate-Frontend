@@ -4,7 +4,6 @@ import { AuthService } from '../../../core/authentication/auth.service';
 import { PermissionService } from '../../../core/authorization/permission.service';
 import { getNavigationForRole } from '../../../core/config/navigation.config';
 import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
-import { getUserRoleLabel } from '../../../core/enums/user-role.enum';
 import { NavigationItem } from '../../../core/models/menu-item.model';
 
 @Component({
@@ -19,13 +18,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       aria-label="Navegación principal"
     >
       <div class="checkmate-sidebar__brand">
-        <img src="/favicon.ico" alt="Logo de CheckMate" />
-        @if (!collapsed) {
-          <div>
-            <strong>CheckMate</strong>
-            <span>Portal del {{ roleLabel() }}</span>
-          </div>
-        }
+        <img src="/img/logos/isotipowhite.png" alt="CheckMate" />
       </div>
 
       <button
@@ -114,11 +107,6 @@ export class SidebarComponent {
     }
 
     return this.authService.getHomeUrl();
-  }
-
-  protected roleLabel(): string {
-    const role = this.authService.currentUser()?.role;
-    return role ? getUserRoleLabel(role) : 'Usuario';
   }
 
   protected signOut(): void {

@@ -1,0 +1,51 @@
+<section id="top" class="landing-hero" aria-labelledby="landing-hero-title">
+  <img
+    class="landing-hero__background"
+    src="https://images.unsplash.com/photo-1758270704763-22072a90d3b6?auto=format&amp;fit=crop&amp;w=2200&amp;q=85"
+    alt=""
+    aria-hidden="true"
+    fetchpriority="high"
+  />
+  <div class="landing-hero__shade" aria-hidden="true"></div>
+
+  <div class="landing-hero__content">
+    <img
+      class="landing-hero__logo"
+      src="/img/logos/imagotipowhite.png"
+      alt="CheckMate"
+      data-landing-hero
+    />
+    <p class="landing-hero__eyebrow" data-landing-hero>Portal academico de asistencia</p>
+    <h1 id="landing-hero-title" data-landing-hero>CheckMate</h1>
+    <p class="landing-hero__lead" data-landing-hero>
+      Gestion inteligente de asistencias con identificacion NFC, codigos QR y
+      consulta en tiempo real para instituciones academicas.
+    </p>
+
+    <div class="landing-hero__actions" data-landing-hero>
+      <a class="btn-checkmate btn-checkmate-primary landing-hero__primary" [routerLink]="loginRoute">
+        <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
+        <span>Abrir portal</span>
+      </a>
+      <a class="btn-checkmate landing-hero__secondary" href="#overview" (click)="scrollToOverview($event)">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span>Conocer mas</span>
+      </a>
+    </div>
+
+    <dl class="landing-hero__metrics" data-landing-hero>
+      <div>
+        <dt>NFC + QR</dt>
+        <dd>Registro flexible</dd>
+      </div>
+      <div>
+        <dt>Roles</dt>
+        <dd>Acceso controlado</dd>
+      </div>
+      <div>
+        <dt>Tiempo real</dt>
+        <dd>Informacion al momento</dd>
+      </div>
+    </dl>
+  </div>
+</section>

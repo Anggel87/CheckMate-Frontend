@@ -1,0 +1,24 @@
+<header class="landing-navbar">
+  <a
+    class="landing-navbar__brand"
+    href="#top"
+    aria-label="Ir al inicio de CheckMate"
+    (click)="scrollTo($event, 'top')"
+  >
+    <img src="/img/logos/isotipo.png" alt="" aria-hidden="true" />
+    <span>CheckMate</span>
+  </a>
+
+  <nav class="landing-navbar__links" aria-label="Secciones de la pagina">
+    @for (item of navItems; track item.targetId) {
+      <a [href]="'#' + item.targetId" (click)="scrollTo($event, item.targetId)">
+        {{ item.label }}
+      </a>
+    }
+  </nav>
+
+  <a class="btn-checkmate btn-checkmate-primary landing-navbar__action" [routerLink]="loginRoute">
+    <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
+    <span>Abrir portal</span>
+  </a>
+</header>

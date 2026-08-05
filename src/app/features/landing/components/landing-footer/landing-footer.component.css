@@ -1,0 +1,36 @@
+:host {
+  display: block;
+}
+
+.landing-footer {
+  padding: 34px clamp(18px, 5vw, 72px);
+  color: rgba(255, 255, 255, 0.74);
+  background: #000000;
+}
+
+.landing-footer__inner {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.landing-footer img {
+  width: 86px;
+  height: auto;
+}
+
+.landing-footer p,
+.landing-footer small {
+  margin: 0;
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .landing-footer__inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
