@@ -41,10 +41,19 @@ import { ConfirmationDialogConfig } from '../../models/confirmation-dialog.model
       <p [id]="descriptionId">{{ config.message }}</p>
 
       <div class="checkmate-dialog__actions">
-        <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="closed.emit(false)">
+        <button
+          type="button"
+          class="btn-checkmate btn-checkmate-secondary"
+          (click)="closed.emit(false)"
+        >
           {{ config.cancelText }}
         </button>
-        <button type="button" class="btn-checkmate" [class]="confirmButtonClass()" (click)="closed.emit(true)">
+        <button
+          type="button"
+          class="btn-checkmate"
+          [class]="confirmButtonClass()"
+          (click)="closed.emit(true)"
+        >
           {{ config.confirmText }}
         </button>
       </div>
@@ -71,8 +80,8 @@ export class ConfirmationDialogComponent implements AfterViewInit {
   }
 
   @HostListener('document:keydown.tab', ['$event'])
-  trapFocus(event: KeyboardEvent): void {
-    this.keepFocusInside(event);
+  trapFocus(event: Event): void {
+    this.keepFocusInside(event as KeyboardEvent);
   }
 
   variantToneClass(): string {

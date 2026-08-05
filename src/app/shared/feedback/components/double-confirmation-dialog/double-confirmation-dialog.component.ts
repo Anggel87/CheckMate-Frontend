@@ -53,7 +53,11 @@ import { DoubleConfirmationDialogConfig } from '../../models/double-confirmation
           <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="cancel()">
             {{ config.cancelText }}
           </button>
-          <button type="button" class="btn-checkmate btn-checkmate-primary" (click)="goToConfirmation()">
+          <button
+            type="button"
+            class="btn-checkmate btn-checkmate-primary"
+            (click)="goToConfirmation()"
+          >
             {{ config.continueText }}
           </button>
         </div>
@@ -128,8 +132,8 @@ export class DoubleConfirmationDialogComponent implements AfterViewInit, OnChang
   }
 
   @HostListener('document:keydown.tab', ['$event'])
-  trapFocus(event: KeyboardEvent): void {
-    this.keepFocusInside(event);
+  trapFocus(event: Event): void {
+    this.keepFocusInside(event as KeyboardEvent);
   }
 
   goToConfirmation(): void {

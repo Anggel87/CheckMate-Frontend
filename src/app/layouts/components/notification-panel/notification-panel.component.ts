@@ -1,5 +1,7 @@
 import { Component, ElementRef, HostListener, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../../core/authentication/auth.service';
+import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
 import { NotificationService } from '../../../core/services/notification.service';
 
 @Component({
@@ -25,7 +27,9 @@ import { NotificationService } from '../../../core/services/notification.service
         <section class="dropdown-panel notification-menu__panel" aria-label="Notificaciones">
           <header>
             <strong>Notificaciones</strong>
-            <button type="button" (click)="notificationService.markAllAsRead()">Marcar leídas</button>
+            <button type="button" (click)="notificationService.markAllAsRead()">
+              Marcar leídas
+            </button>
           </header>
 
           @if (notificationService.notifications().length) {
@@ -34,7 +38,7 @@ import { NotificationService } from '../../../core/services/notification.service
                 <a
                   class="notification-item"
                   [class.is-unread]="!notification.read"
-                  [routerLink]="notification.route ?? '/'"
+                  [routerLink]="notificationsRoute()"
                   (click)="notificationService.markAsRead(notification.id); open.set(false)"
                 >
                   <span></span>
@@ -50,7 +54,7 @@ import { NotificationService } from '../../../core/services/notification.service
             <p class="dropdown-empty">No tienes notificaciones nuevas.</p>
           }
 
-          <a class="dropdown-link" routerLink="/teacher/notifications" (click)="open.set(false)">
+          <a class="dropdown-link" [routerLink]="notificationsRoute()" (click)="open.set(false)">
             Ver todas
           </a>
         </section>
@@ -60,6 +64,7 @@ import { NotificationService } from '../../../core/services/notification.service
 })
 export class NotificationPanelComponent {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly authService = inject(AuthService);
   protected readonly notificationService = inject(NotificationService);
   protected readonly open = signal(false);
 
@@ -75,5 +80,10 @@ export class NotificationPanelComponent {
   toggle(event: MouseEvent): void {
     event.stopPropagation();
     this.open.update((open) => !open);
+  }
+
+  notificationsRoute(): string {
+    const role = this.authService.currentUser()?.role;
+    return role ? `${ROUTE_PATHS.rolePrefix[role]}/notifications` : ROUTE_PATHS.login;
   }
 }

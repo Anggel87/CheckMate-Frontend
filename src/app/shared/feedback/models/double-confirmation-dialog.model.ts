@@ -1,4 +1,5 @@
 import { DialogVariant } from './dialog.model';
+import { ConfirmationDialogConfig } from './confirmation-dialog.model';
 
 export interface DoubleConfirmationDialogOptions {
   title: string;

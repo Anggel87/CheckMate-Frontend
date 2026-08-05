@@ -1,38 +1,45 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../../core/authentication/auth.service';
+import { ROUTE_PATHS } from '../../../../core/constants/route-paths.constants';
+import { UserRole } from '../../../../core/enums/user-role.enum';
 import {
   DASHBOARD_METRICS_BY_ROLE,
   DASHBOARD_STUDENTS,
-  QUICK_ACTIONS_BY_ROLE,
-  RECENT_ACTIVITY,
   TODAY_CLASSES,
 } from '../../../../core/mocks/dashboard.mock';
-import { PermissionService } from '../../../../core/authorization/permission.service';
-import { QuickAction } from '../../../../core/models/menu-item.model';
 import { CardComponent } from '../../../../shared/components/card/card.component';
-import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { PageHeaderComponent } from '../../../../shared/components/page-header/page-header.component';
 import { StatCardComponent } from '../../../../shared/components/stat-card/stat-card.component';
-import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 
 @Component({
   selector: 'app-welcome-dashboard',
   standalone: true,
-  imports: [RouterLink, CardComponent, EmptyStateComponent, PageHeaderComponent, StatCardComponent, StatusBadgeComponent],
+  imports: [RouterLink, CardComponent, PageHeaderComponent, StatCardComponent],
   template: `
     <section class="dashboard-page">
       <div class="dashboard-page__hero">
         <app-page-header [title]="welcomeTitle()" [description]="welcomeDescription()" />
 
         <aside class="next-class-card" aria-label="Próxima clase">
-          <span>Próxima clase en</span>
-          <strong>15 <small>minutos</small></strong>
-          <div>
-            <b>Base de datos</b>
-            <small>Grupo 1-A · Aula 204</small>
+          <div class="next-class-card__header">
+            <div>
+              <span>Próxima clase en</span>
+              <strong>15 <small>minutos</small></strong>
+            </div>
+            <span class="next-class-card__icon" aria-hidden="true">
+              <i class="fa-solid fa-clock"></i>
+            </span>
           </div>
-          <a class="btn-checkmate btn-checkmate-light" [routerLink]="attendanceRoute()">Iniciar</a>
+          <div class="next-class-card__footer">
+            <div>
+              <b>Base de datos</b>
+              <small>Grupo 1-A • Aula 204</small>
+            </div>
+            <a class="btn-checkmate btn-checkmate-light" [routerLink]="attendanceRoute()"
+              >Iniciar</a
+            >
+          </div>
         </aside>
       </div>
 
@@ -72,8 +79,12 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
                     {{ classItem.time }}
                   </small>
                 </div>
-                <button type="button" class="icon-button" [attr.aria-label]="'Abrir ' + classItem.subject">
-                  <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                <button
+                  type="button"
+                  class="icon-button"
+                  [attr.aria-label]="'Abrir ' + classItem.subject"
+                >
+                  <i [class]="classActionIcon(classItem.status)" aria-hidden="true"></i>
                 </button>
               </article>
             }
@@ -101,68 +112,38 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
           <div class="student-list">
             @for (student of students; track student.enrollment) {
               <article class="student-row">
-                <span class="avatar">{{ initials(student.name) }}</span>
+                @if (student.avatarUrl) {
+                  <img
+                    class="student-row__avatar"
+                    [src]="student.avatarUrl"
+                    [alt]="'Foto de ' + student.name"
+                  />
+                } @else {
+                  <span class="avatar">{{ initials(student.name) }}</span>
+                }
                 <div>
                   <strong>{{ student.name }}</strong>
                   <small>Matrícula: {{ student.enrollment }}</small>
                 </div>
-                <app-status-badge [label]="statusLabel(student.status)" [tone]="student.status" />
+                <span
+                  class="student-row__status"
+                  [class]="'student-row__status student-row__status--' + student.status"
+                  [title]="statusLabel(student.status)"
+                  aria-hidden="true"
+                ></span>
                 <button type="button" class="icon-button" [attr.aria-label]="'Ver ' + student.name">
                   <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
                 </button>
               </article>
             }
           </div>
-        </app-card>
-      </section>
 
-      <section class="dashboard-page__columns">
-        <app-card>
-          <div class="panel-heading">
-            <div>
-              <h2>Acciones rápidas</h2>
-              <p>Disponibles según tu rol</p>
-            </div>
-          </div>
-
-          <div class="quick-actions">
-            @for (action of quickActions(); track action.label) {
-              <a class="quick-action" [routerLink]="action.route">
-                <i [class]="action.icon" aria-hidden="true"></i>
-                <span>{{ action.label }}</span>
-              </a>
-            }
-          </div>
-        </app-card>
-
-        <app-card>
-          <div class="panel-heading">
-            <div>
-              <h2>Actividad reciente</h2>
-              <p>Últimos movimientos registrados</p>
-            </div>
-          </div>
-
-          @if (activity.length) {
-            <div class="activity-list">
-              @for (item of activity; track item.title) {
-                <article class="activity-row">
-                  <span aria-hidden="true"><i [class]="item.icon"></i></span>
-                  <div>
-                    <strong>{{ item.title }}</strong>
-                    <p>{{ item.description }}</p>
-                    <small>{{ item.date }}</small>
-                  </div>
-                </article>
-              }
-            </div>
-          } @else {
-            <app-empty-state
-              icon="fa-solid fa-clock-rotate-left"
-              title="No hay actividad reciente."
-              description="Cuando existan movimientos aparecerán en esta sección."
-            />
-          }
+          <a
+            class="btn-checkmate btn-checkmate-secondary students-card__action"
+            [routerLink]="studentsActionRoute()"
+          >
+            {{ studentsActionLabel() }}
+          </a>
         </app-card>
       </section>
     </section>
@@ -170,19 +151,16 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 })
 export class WelcomeDashboardComponent {
   private readonly authService = inject(AuthService);
-  private readonly permissionService = inject(PermissionService);
 
   protected readonly todayClasses = TODAY_CLASSES;
   protected readonly students = DASHBOARD_STUDENTS;
-  protected readonly activity = RECENT_ACTIVITY;
 
   protected welcomeTitle(): string {
-    const user = this.authService.currentUser();
-    return user ? `${this.greeting()}, ${user.fullName}.` : 'Bienvenido a CheckMate';
+    return `Bienvenido, ${this.dashboardRoleName()}`;
   }
 
   protected welcomeDescription(): string {
-    return 'Administra y consulta la información académica desde un solo lugar.';
+    return `Hoy es ${this.todayLabel()}. Aquí tienes el resumen de tus actividades.`;
   }
 
   protected metrics() {
@@ -190,13 +168,31 @@ export class WelcomeDashboardComponent {
     return role ? DASHBOARD_METRICS_BY_ROLE[role] : [];
   }
 
-  protected quickActions(): QuickAction[] {
+  protected attendanceRoute(): string {
     const role = this.authService.currentUser()?.role;
-    return role ? this.permissionService.filterActions(QUICK_ACTIONS_BY_ROLE[role]) : [];
+    return role ? `${ROUTE_PATHS.rolePrefix[role]}/attendance` : this.authService.getHomeUrl();
   }
 
-  protected attendanceRoute(): string {
-    return this.quickActions().find((action) => action.route.includes('attendance'))?.route ?? this.authService.getHomeUrl();
+  protected studentsActionRoute(): string {
+    const role = this.authService.currentUser()?.role;
+
+    if (!role) {
+      return this.authService.getHomeUrl();
+    }
+
+    return role === UserRole.STUDENT
+      ? `${ROUTE_PATHS.rolePrefix[role]}/profile`
+      : `${ROUTE_PATHS.rolePrefix[role]}/students`;
+  }
+
+  protected studentsActionLabel(): string {
+    return this.authService.currentUser()?.role === UserRole.STUDENT
+      ? 'Ver mi perfil'
+      : 'Ver todos los alumnos';
+  }
+
+  protected classActionIcon(status: 'active' | 'pending' | 'completed'): string {
+    return status === 'active' ? 'fa-solid fa-play' : 'fa-solid fa-arrow-up-right-from-square';
   }
 
   protected initials(name: string): string {
@@ -219,17 +215,26 @@ export class WelcomeDashboardComponent {
     return labels[status];
   }
 
-  private greeting(): string {
-    const hour = new Date().getHours();
+  private dashboardRoleName(): string {
+    const role = this.authService.currentUser()?.role;
+    const labels: Record<UserRole, string> = {
+      [UserRole.ADMIN]: 'Administrador',
+      [UserRole.CAREER_DIRECTOR]: 'Director',
+      [UserRole.TEACHER]: 'Profesor',
+      [UserRole.TUTOR_TEACHER]: 'Profesor tutor',
+      [UserRole.STUDENT]: 'Alumno',
+    };
 
-    if (hour < 12) {
-      return 'Buenos días';
-    }
+    return role ? labels[role] : 'CheckMate';
+  }
 
-    if (hour < 19) {
-      return 'Buenas tardes';
-    }
+  private todayLabel(): string {
+    const date = new Intl.DateTimeFormat('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date());
 
-    return 'Buenas noches';
+    return date.charAt(0).toUpperCase() + date.slice(1);
   }
 }

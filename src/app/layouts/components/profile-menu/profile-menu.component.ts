@@ -1,6 +1,7 @@
 import { Component, ElementRef, HostListener, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/authentication/auth.service';
+import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
 import { getUserRoleLabel } from '../../../core/enums/user-role.enum';
 
 @Component({
@@ -16,12 +17,13 @@ import { getUserRoleLabel } from '../../../core/enums/user-role.enum';
         [attr.aria-expanded]="open()"
         (click)="toggle($event)"
       >
-        <span class="avatar">{{ authService.currentUser()?.initials ?? 'CM' }}</span>
-        <span class="profile-menu__summary">
-          <strong>{{ authService.currentUser()?.fullName ?? 'Usuario' }}</strong>
-          <small>{{ roleLabel() }}</small>
+        <span class="profile-menu__avatar">
+          @if (avatarUrl()) {
+            <img [src]="avatarUrl()" alt="Foto de perfil" />
+          } @else {
+            <span>{{ authService.currentUser()?.initials ?? 'CM' }}</span>
+          }
         </span>
-        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
       </button>
 
       @if (open()) {
@@ -34,18 +36,18 @@ import { getUserRoleLabel } from '../../../core/enums/user-role.enum';
             </div>
           </header>
 
-          <a routerLink="/student/profile" (click)="open.set(false)">
+          <a [routerLink]="profileRoute()" (click)="open.set(false)">
             <i class="fa-solid fa-user" aria-hidden="true"></i>
-            <span>Mi perfil</span>
+            <span>Perfil</span>
           </a>
-          <a routerLink="/admin/settings" (click)="open.set(false)">
-            <i class="fa-solid fa-gear" aria-hidden="true"></i>
-            <span>Configuración</span>
+          <a
+            [routerLink]="profileRoute()"
+            [queryParams]="{ tab: 'account' }"
+            (click)="open.set(false)"
+          >
+            <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+            <span>Mi cuenta</span>
           </a>
-          <button type="button" (click)="signOut()">
-            <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
-            <span>Cerrar sesión</span>
-          </button>
         </section>
       }
     </div>
@@ -53,7 +55,6 @@ import { getUserRoleLabel } from '../../../core/enums/user-role.enum';
 })
 export class ProfileMenuComponent {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly router = inject(Router);
   protected readonly authService = inject(AuthService);
   protected readonly open = signal(false);
 
@@ -76,9 +77,12 @@ export class ProfileMenuComponent {
     return role ? getUserRoleLabel(role) : '';
   }
 
-  signOut(): void {
-    this.authService.signOut();
-    this.open.set(false);
-    void this.router.navigateByUrl('/auth/login');
+  avatarUrl(): string {
+    return this.authService.currentUser()?.avatarUrl ?? '';
+  }
+
+  profileRoute(): string {
+    const role = this.authService.currentUser()?.role;
+    return role ? `${ROUTE_PATHS.rolePrefix[role]}/profile` : ROUTE_PATHS.login;
   }
 }

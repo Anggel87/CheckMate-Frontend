@@ -5,6 +5,7 @@ const COMMON_PERMISSIONS = [
   'dashboard.view',
   'notifications.view',
   'profile.view',
+  'settings.view',
 ];
 
 export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
@@ -14,6 +15,7 @@ export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
     email: 'admin@checkmate.edu',
     role: UserRole.ADMIN,
     initials: 'AM',
+    avatarUrl: '/profile-avatar.svg',
     permissions: ['*'],
     token: 'dev-admin-token',
   },
@@ -23,6 +25,7 @@ export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
     email: 'director@checkmate.edu',
     role: UserRole.CAREER_DIRECTOR,
     initials: 'CR',
+    avatarUrl: '/profile-avatar.svg',
     career: 'Tecnologías de la Información',
     permissions: [
       ...COMMON_PERMISSIONS,
@@ -46,15 +49,18 @@ export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
     email: 'profesor@checkmate.edu',
     role: UserRole.TEACHER,
     initials: 'PC',
+    avatarUrl: '/profile-avatar.svg',
     career: 'TICS',
     permissions: [
       ...COMMON_PERMISSIONS,
+      'students.view',
       'schedule.view',
       'groups.view',
       'attendance.view',
       'claims.view',
       'justifications.view',
       'statistics.view',
+      'incidents.view',
       'emergencies.view',
     ],
     token: 'dev-teacher-token',
@@ -65,6 +71,7 @@ export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
     email: 'tutor@checkmate.edu',
     role: UserRole.TUTOR_TEACHER,
     initials: 'ML',
+    avatarUrl: '/profile-avatar.svg',
     career: 'Mecatrónica',
     permissions: [
       ...COMMON_PERMISSIONS,
@@ -85,6 +92,7 @@ export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
     email: 'alumno@checkmate.edu',
     role: UserRole.STUDENT,
     initials: 'JR',
+    avatarUrl: '/profile-avatar.svg',
     group: 'Grupo 1-A',
     permissions: [
       ...COMMON_PERMISSIONS,

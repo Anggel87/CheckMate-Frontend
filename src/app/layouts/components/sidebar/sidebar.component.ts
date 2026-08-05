@@ -1,8 +1,10 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/authentication/auth.service';
 import { PermissionService } from '../../../core/authorization/permission.service';
 import { getNavigationForRole } from '../../../core/config/navigation.config';
+import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
+import { getUserRoleLabel } from '../../../core/enums/user-role.enum';
 import { NavigationItem } from '../../../core/models/menu-item.model';
 
 @Component({
@@ -21,7 +23,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
         @if (!collapsed) {
           <div>
             <strong>CheckMate</strong>
-            <span>Portal académico</span>
+            <span>Portal del {{ roleLabel() }}</span>
           </div>
         }
       </div>
@@ -53,13 +55,33 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       </nav>
 
       <div class="checkmate-sidebar__footer">
-        <a class="btn-checkmate btn-checkmate-light" [routerLink]="attendanceRoute()" (click)="closeMobile.emit()">
+        <a
+          class="btn-checkmate btn-checkmate-light"
+          [routerLink]="attendanceRoute()"
+          (click)="closeMobile.emit()"
+        >
           <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
           @if (!collapsed) {
             <span>Pasar lista</span>
           }
         </a>
-        <a class="checkmate-sidebar-link" routerLink="/help" [title]="collapsed ? 'Ayuda' : ''" (click)="closeMobile.emit()">
+        <button
+          type="button"
+          class="checkmate-sidebar-link checkmate-sidebar-logout"
+          [title]="collapsed ? 'Cerrar sesión' : ''"
+          (click)="signOut()"
+        >
+          <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+          @if (!collapsed) {
+            <span>Cerrar sesión</span>
+          }
+        </button>
+        <a
+          class="checkmate-sidebar-link"
+          routerLink="/help"
+          [title]="collapsed ? 'Ayuda' : ''"
+          (click)="closeMobile.emit()"
+        >
           <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
           @if (!collapsed) {
             <span>Ayuda</span>
@@ -72,6 +94,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
 export class SidebarComponent {
   private readonly authService = inject(AuthService);
   private readonly permissionService = inject(PermissionService);
+  private readonly router = inject(Router);
 
   @Input() collapsed = false;
   @Input() mobileOpen = false;
@@ -84,6 +107,23 @@ export class SidebarComponent {
   }
 
   protected attendanceRoute(): string {
-    return this.menuItems().find((item) => item.route.endsWith('/attendance'))?.route ?? this.authService.getHomeUrl();
+    const role = this.authService.currentUser()?.role;
+
+    if (role && this.permissionService.hasPermission('attendance.view')) {
+      return `${ROUTE_PATHS.rolePrefix[role]}/attendance`;
+    }
+
+    return this.authService.getHomeUrl();
+  }
+
+  protected roleLabel(): string {
+    const role = this.authService.currentUser()?.role;
+    return role ? getUserRoleLabel(role) : 'Usuario';
+  }
+
+  protected signOut(): void {
+    this.authService.signOut();
+    this.closeMobile.emit();
+    void this.router.navigateByUrl('/auth/login');
   }
 }

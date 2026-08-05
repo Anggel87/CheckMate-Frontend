@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/authentication/auth.service';
 import { PermissionService } from '../../../core/authorization/permission.service';
 import { getNavigationForRole } from '../../../core/config/navigation.config';
+import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
 import { NavigationItem } from '../../../core/models/menu-item.model';
 import { NotificationPanelComponent } from '../notification-panel/notification-panel.component';
 import { ProfileMenuComponent } from '../profile-menu/profile-menu.component';
@@ -14,7 +15,12 @@ import { ProfileMenuComponent } from '../profile-menu/profile-menu.component';
   template: `
     <header class="checkmate-topbar">
       <div class="checkmate-topbar__left">
-        <button type="button" class="icon-button" aria-label="Abrir navegación" (click)="menuToggle.emit()">
+        <button
+          type="button"
+          class="icon-button"
+          aria-label="Abrir navegación"
+          (click)="menuToggle.emit()"
+        >
           <i class="fa-solid fa-bars" aria-hidden="true"></i>
         </button>
         <strong>{{ currentTitle() }}</strong>
@@ -24,7 +30,12 @@ import { ProfileMenuComponent } from '../profile-menu/profile-menu.component';
         <app-notification-panel />
 
         @if (permissionService.hasPermission('settings.view')) {
-          <a class="icon-button" routerLink="/admin/settings" aria-label="Configuración" title="Configuración">
+          <a
+            class="icon-button"
+            [routerLink]="settingsRoute()"
+            aria-label="Configuración"
+            title="Configuración"
+          >
             <i class="fa-solid fa-gear" aria-hidden="true"></i>
           </a>
         }
@@ -53,7 +64,15 @@ export class TopbarComponent {
     return allItems.find((item) => currentUrl.startsWith(item.route))?.label ?? 'Dashboard';
   }
 
+  protected settingsRoute(): string {
+    const role = this.authService.currentUser()?.role;
+    return role ? `${ROUTE_PATHS.rolePrefix[role]}/settings` : ROUTE_PATHS.login;
+  }
+
   private flattenNavigation(items: NavigationItem[]): NavigationItem[] {
-    return items.flatMap((item) => [item, ...(item.children ? this.flattenNavigation(item.children) : [])]);
+    return items.flatMap((item) => [
+      item,
+      ...(item.children ? this.flattenNavigation(item.children) : []),
+    ]);
   }
 }
