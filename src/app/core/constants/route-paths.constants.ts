@@ -4,6 +4,7 @@ export const ROUTE_PATHS = {
   auth: '/auth',
   login: '/auth/login',
   authCallback: '/auth/callback',
+  portal: '/portal',
   forbidden: '/forbidden',
   notFound: '/not-found',
   serverError: '/server-error',

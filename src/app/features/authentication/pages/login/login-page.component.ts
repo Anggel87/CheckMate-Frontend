@@ -1,57 +1,62 @@
-import { Component, inject } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Component, OnInit, inject } from '@angular/core';
 import { AuthService } from '../../../../core/authentication/auth.service';
-import { UserRole, getUserRoleLabel } from '../../../../core/enums/user-role.enum';
-import { ToastService } from '../../../../shared/feedback/services/toast.service';
-import { SelectInputComponent, SelectInputOption } from '../../../../shared/forms/select-input/select-input.component';
 
 @Component({
   selector: 'app-login-page',
   standalone: true,
-  imports: [ReactiveFormsModule, SelectInputComponent],
   template: `
-    <form class="login-card" [formGroup]="form" (ngSubmit)="submit()">
-      <div class="login-card__header">
-        <img src="/favicon.ico" alt="Logo de CheckMate" />
-        <div>
-          <h1>Iniciar sesión</h1>
-          <p>Selecciona un rol para probar el scaffolding inicial.</p>
-        </div>
-      </div>
-
-      <app-select-input
-        label="Rol de desarrollo"
-        formControlName="role"
-        [options]="roleOptions"
-        [required]="true"
-      />
-
-      <button type="submit" class="btn-checkmate btn-checkmate-primary">
+    <section class="login-redirect" aria-live="polite">
+      <i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>
+      <h1>Redirigiendo al inicio de sesion</h1>
+      <p>La autenticacion se realiza desde la gobernanza centralizada de CheckMate.</p>
+      <button type="button" class="btn-checkmate btn-checkmate-primary" (click)="redirect()">
         <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
-        <span>Entrar a CheckMate</span>
+        <span>Continuar</span>
       </button>
-    </form>
+    </section>
   `,
+  styles: [
+    `
+      .login-redirect {
+        display: flex;
+        min-height: min(420px, 100vh);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 48px 24px;
+        text-align: center;
+      }
+
+      .login-redirect i {
+        color: var(--checkmate-info, #007aff);
+        font-size: 24px;
+      }
+
+      .login-redirect h1 {
+        margin: 0;
+        color: var(--checkmate-text-primary, #1d1d1f);
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .login-redirect p {
+        max-width: 360px;
+        margin: 0;
+        color: var(--checkmate-text-secondary, #6e6e73);
+        font-size: 15px;
+      }
+    `,
+  ],
 })
-export class LoginPageComponent {
-  private readonly formBuilder = inject(NonNullableFormBuilder);
+export class LoginPageComponent implements OnInit {
   private readonly authService = inject(AuthService);
-  private readonly router = inject(Router);
-  private readonly toastService = inject(ToastService);
 
-  protected readonly roleOptions: SelectInputOption[] = Object.values(UserRole).map((role) => ({
-    label: getUserRoleLabel(role),
-    value: role,
-  }));
+  ngOnInit(): void {
+    this.redirect();
+  }
 
-  protected readonly form = this.formBuilder.group({
-    role: this.formBuilder.control<UserRole>(UserRole.TEACHER),
-  });
-
-  protected submit(): void {
-    const redirectUrl = this.authService.signInAs(this.form.controls.role.value);
-    this.toastService.success('Sesión iniciada', 'El entorno de desarrollo cargó el usuario seleccionado.');
-    void this.router.navigateByUrl(redirectUrl);
+  protected redirect(): void {
+    this.authService.login();
   }
 }

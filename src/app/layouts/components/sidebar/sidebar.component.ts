@@ -166,7 +166,6 @@ export class SidebarComponent {
   protected signOut(): void {
     this.authService.signOut();
     this.closeMobile.emit();
-    void this.router.navigateByUrl('/auth/login');
   }
 
   private isRouteActive(route: string): boolean {

@@ -1,17 +1,24 @@
 import { computed, Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { catchError, map, Observable, of, switchMap } from 'rxjs';
+import { catchError, finalize, map, Observable, of, switchMap } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { CHECKMATE_ROLE_USERS } from '../mocks/auth.mock';
 import { ApiResponse } from '../models/api-response.model';
 import { AuthenticatedUser } from '../models/authenticated-user.model';
 import { ROUTE_PATHS } from '../constants/route-paths.constants';
-import { UserRole } from '../enums/user-role.enum';
 import { ToastService } from '../../shared/feedback/services/toast.service';
-import { GovernanceAuthMessage, GovernanceUser } from './governance-auth.model';
+import {
+  GovernanceAuthPayload,
+  GovernanceCodeExchangeRequest,
+  GovernanceUser,
+} from './governance-auth.model';
 import { mapGovernanceRole } from './governance-role.mapper';
 import { SessionService } from './session.service';
+import {
+  buildGovernanceLoginUrl,
+  buildGovernanceLogoutUrl,
+  checkmatePortalUrl,
+} from './auth-redirect-url.util';
 
 @Injectable({
   providedIn: 'root',
@@ -25,74 +32,45 @@ export class AuthService {
   readonly currentUser = this.sessionService.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
 
-  private popupWindow: Window | null = null;
-  private popupMessageListener: ((event: MessageEvent) => void) | null = null;
-
-  login(): void {
-    this.detachPopupListener();
-
-    const redirectUri = `${window.location.origin}${ROUTE_PATHS.authCallback}`;
-    const popupUrl =
-      `${environment.governanceBaseUrl}/governance/auth` +
-      `?client_id=${environment.governanceClientId}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}`;
-
-    this.popupWindow = window.open(popupUrl, 'governance-login', 'width=500,height=600');
-
-    this.popupMessageListener = (event: MessageEvent<GovernanceAuthMessage>) => {
-      if (event.origin !== this.governanceOrigin() || event.data?.type !== 'governance_auth') {
-        return;
-      }
-
-      const { token, token_type, user } = event.data.data;
-      const authenticatedUser$ = user ? this.toAuthenticatedUser(token, token_type, user) : of(null);
-
-      authenticatedUser$.subscribe((authenticatedUser) => {
-        if (authenticatedUser) {
-          this.sessionService.setUser(authenticatedUser);
-          void this.router.navigateByUrl(this.getHomeUrl());
-        } else {
-          this.toastService.error('No se pudo iniciar sesión', 'Tu rol no está soportado en este portal.');
-        }
-      });
-
-      this.popupWindow?.close();
-      this.detachPopupListener();
-    };
-
-    window.addEventListener('message', this.popupMessageListener);
+  login(returnPathOrUrl = ROUTE_PATHS.portal): void {
+    window.location.assign(buildGovernanceLoginUrl(returnPathOrUrl));
   }
 
-  completeCallback(token: string, tokenType: string) {
+  completeRedirect(code: string, returnUrl = checkmatePortalUrl()) {
+    const request: GovernanceCodeExchangeRequest = {
+      code,
+      client_id: environment.governanceClientId,
+      return_url: returnUrl,
+      device_name: 'web-redirect',
+    };
+
     return this.http
-      .get<ApiResponse<GovernanceUser>>(`${environment.governanceApiUrl}/auth/me`, {
-        headers: { Authorization: `${tokenType} ${token}` },
-      })
+      .post<ApiResponse<GovernanceAuthPayload>>(
+        `${environment.governanceApiUrl}/auth/exchange-code`,
+        request,
+      )
       .pipe(
         catchError(() => of(null)),
-        switchMap((response) =>
-          response?.data ? this.toAuthenticatedUser(token, tokenType, response.data) : of(null),
-        ),
-      )
-      .subscribe((authenticatedUser) => {
-        if (authenticatedUser) {
-          this.sessionService.setUser(authenticatedUser);
-          void this.router.navigateByUrl(this.getHomeUrl());
-          return;
-        }
+        switchMap((response) => {
+          const payload = response?.data;
 
-        this.toastService.error('No se pudo iniciar sesión', 'Tu rol no está soportado en este portal.');
-        void this.router.navigateByUrl(ROUTE_PATHS.login);
-      });
+          return payload?.token && payload.token_type && payload.user
+            ? this.toAuthenticatedUser(payload.token, payload.token_type, payload.user)
+            : of(null);
+        }),
+      )
+      .subscribe((authenticatedUser) => this.handleAuthenticatedUser(authenticatedUser));
   }
 
   signOut(): void {
     const token = this.sessionService.authToken();
     const tokenType = this.sessionService.tokenType() ?? 'Bearer';
+    const logoutUrl = buildGovernanceLogoutUrl();
 
     this.sessionService.clear();
 
     if (!token) {
+      window.location.assign(logoutUrl);
       return;
     }
 
@@ -102,13 +80,11 @@ export class AuthService {
         {},
         { headers: { Authorization: `${tokenType} ${token}` } },
       )
-      .pipe(catchError(() => of(null)))
+      .pipe(
+        catchError(() => of(null)),
+        finalize(() => window.location.assign(logoutUrl)),
+      )
       .subscribe();
-  }
-
-  signInAs(role: UserRole): string {
-    this.sessionService.setUser(CHECKMATE_ROLE_USERS[role]);
-    return ROUTE_PATHS.roleHome[role];
   }
 
   getHomeUrl(): string {
@@ -155,14 +131,14 @@ export class AuthService {
       .join('');
   }
 
-  private governanceOrigin(): string {
-    return new URL(environment.governanceBaseUrl).origin;
-  }
-
-  private detachPopupListener(): void {
-    if (this.popupMessageListener) {
-      window.removeEventListener('message', this.popupMessageListener);
-      this.popupMessageListener = null;
+  private handleAuthenticatedUser(authenticatedUser: AuthenticatedUser | null): void {
+    if (authenticatedUser) {
+      this.sessionService.setUser(authenticatedUser);
+      void this.router.navigateByUrl(this.getHomeUrl(), { replaceUrl: true });
+      return;
     }
+
+    this.toastService.error('No se pudo iniciar sesion', 'Tu sesion no pudo validarse en este portal.');
+    this.login();
   }
 }

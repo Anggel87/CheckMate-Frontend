@@ -11,7 +11,9 @@ export interface GovernanceAuthPayload {
   user: GovernanceUser | null;
 }
 
-export interface GovernanceAuthMessage {
-  type: 'governance_auth';
-  data: GovernanceAuthPayload;
+export interface GovernanceCodeExchangeRequest {
+  code: string;
+  client_id: string;
+  return_url: string;
+  device_name: string;
 }

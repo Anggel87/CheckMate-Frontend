@@ -11,6 +11,13 @@ import { TUTOR_TEACHER_ROUTES } from './roles/tutor-teacher/tutor-teacher.routes
 export const routes: Routes = [
   ...LANDING_ROUTES,
   {
+    path: 'portal',
+    loadComponent: () =>
+      import('./features/authentication/pages/portal-entry/portal-entry.component').then(
+        (component) => component.PortalEntryComponent,
+      ),
+  },
+  {
     path: 'auth',
     canActivate: [guestGuard],
     loadComponent: () =>
