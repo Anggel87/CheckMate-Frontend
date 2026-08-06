@@ -8,6 +8,7 @@ export interface AuthenticatedUser {
   permissions: string[];
   initials: string;
   token?: string;
+  tokenType?: string;
   avatarUrl?: string;
   career?: string;
   group?: string;

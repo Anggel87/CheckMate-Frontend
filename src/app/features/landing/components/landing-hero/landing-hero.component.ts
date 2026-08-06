@@ -1,15 +1,18 @@
-import { Component, Input } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { AuthService } from '../../../../core/authentication/auth.service';
 
 @Component({
   selector: 'app-landing-hero',
   standalone: true,
-  imports: [RouterLink],
   templateUrl: './landing-hero.component.html',
   styleUrl: './landing-hero.component.css',
 })
 export class LandingHeroComponent {
-  @Input({ required: true }) loginRoute = '/auth/login';
+  private readonly authService = inject(AuthService);
+
+  protected openPortal(): void {
+    this.authService.login();
+  }
 
   protected scrollToOverview(event: Event): void {
     event.preventDefault();

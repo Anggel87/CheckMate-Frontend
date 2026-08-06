@@ -23,10 +23,14 @@
     </p>
 
     <div class="landing-hero__actions" data-landing-hero>
-      <a class="btn-checkmate btn-checkmate-primary landing-hero__primary" [routerLink]="loginRoute">
+      <button
+        type="button"
+        class="btn-checkmate btn-checkmate-primary landing-hero__primary"
+        (click)="openPortal()"
+      >
         <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
         <span>Abrir portal</span>
-      </a>
+      </button>
       <a class="btn-checkmate landing-hero__secondary" href="#overview" (click)="scrollToOverview($event)">
         <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
         <span>Conocer mas</span>

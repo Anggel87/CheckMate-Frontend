@@ -1,4 +1,7 @@
 export const environment = {
   production: true,
-  apiUrl: '',
+  governanceBaseUrl: '',
+  governanceApiUrl: '',
+  governanceClientId: '',
+  checkmateApiUrl: '',
 };

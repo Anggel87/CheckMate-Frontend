@@ -1,5 +1,5 @@
-import { Component, Input } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { AuthService } from '../../../../core/authentication/auth.service';
 
 interface LandingNavItem {
   label: string;
@@ -9,12 +9,11 @@ interface LandingNavItem {
 @Component({
   selector: 'app-landing-navbar',
   standalone: true,
-  imports: [RouterLink],
   templateUrl: './landing-navbar.component.html',
   styleUrl: './landing-navbar.component.css',
 })
 export class LandingNavbarComponent {
-  @Input({ required: true }) loginRoute = '/auth/login';
+  private readonly authService = inject(AuthService);
 
   protected readonly navItems: LandingNavItem[] = [
     { label: 'Sistema', targetId: 'overview' },
@@ -37,5 +36,9 @@ export class LandingNavbarComponent {
       : 'smooth';
 
     target.scrollIntoView({ behavior, block: 'start' });
+  }
+
+  protected openPortal(): void {
+    this.authService.login();
   }
 }

@@ -3,6 +3,7 @@ import { UserRole } from '../enums/user-role.enum';
 export const ROUTE_PATHS = {
   auth: '/auth',
   login: '/auth/login',
+  authCallback: '/auth/callback',
   forbidden: '/forbidden',
   notFound: '/not-found',
   serverError: '/server-error',

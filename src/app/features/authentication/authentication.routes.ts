@@ -12,6 +12,13 @@ export const AUTHENTICATION_ROUTES: Routes = [
       import('./pages/login/login-page.component').then((component) => component.LoginPageComponent),
   },
   {
+    path: 'callback',
+    loadComponent: () =>
+      import('./pages/auth-callback/auth-callback.component').then(
+        (component) => component.AuthCallbackComponent,
+      ),
+  },
+  {
     path: 'forgot-password',
     loadComponent: () =>
       import('../../shared/components/feature-placeholder/feature-placeholder.component').then(

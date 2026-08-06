@@ -1,18 +1,20 @@
 import { inject } from '@angular/core';
 import { HttpInterceptorFn } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 import { SessionService } from '../authentication/session.service';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
-  const token = inject(SessionService).authToken();
+  const sessionService = inject(SessionService);
+  const token = sessionService.authToken();
 
-  if (!token) {
+  if (!token || !environment.checkmateApiUrl || !request.url.startsWith(environment.checkmateApiUrl)) {
     return next(request);
   }
 
   return next(
     request.clone({
       setHeaders: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `${sessionService.tokenType() ?? 'Bearer'} ${token}`,
       },
     }),
   );

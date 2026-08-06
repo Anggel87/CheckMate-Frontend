@@ -1,13 +1,16 @@
-import { Component, Input } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { AuthService } from '../../../../core/authentication/auth.service';
 
 @Component({
   selector: 'app-landing-cta',
   standalone: true,
-  imports: [RouterLink],
   templateUrl: './landing-cta.component.html',
   styleUrl: './landing-cta.component.css',
 })
 export class LandingCtaComponent {
-  @Input({ required: true }) loginRoute = '/auth/login';
+  private readonly authService = inject(AuthService);
+
+  protected openPortal(): void {
+    this.authService.login();
+  }
 }

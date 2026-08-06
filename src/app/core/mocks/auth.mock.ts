@@ -106,5 +106,3 @@ export const CHECKMATE_ROLE_USERS: Record<UserRole, AuthenticatedUser> = {
     token: 'dev-student-token',
   },
 };
-
-export const CHECKMATE_DEV_USER = CHECKMATE_ROLE_USERS[UserRole.TEACHER];

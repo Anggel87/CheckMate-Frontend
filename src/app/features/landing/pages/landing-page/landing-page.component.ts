@@ -1,5 +1,4 @@
 import { Component } from '@angular/core';
-import { ROUTE_PATHS } from '../../../../core/constants/route-paths.constants';
 import {
   LandingBenefit,
   LandingFeature,
@@ -30,8 +29,6 @@ import { LandingProcessComponent } from '../../components/landing-process/landin
   styleUrl: './landing-page.component.css',
 })
 export class LandingPageComponent {
-  protected readonly loginRoute = ROUTE_PATHS.login;
-
   protected readonly features: LandingFeature[] = [
     {
       icon: 'fa-solid fa-calendar-check',
