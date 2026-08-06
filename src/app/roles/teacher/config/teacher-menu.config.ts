@@ -12,12 +12,28 @@ export const TEACHER_MENU: NavigationItem[] = [
     icon: 'fa-solid fa-book-open',
     route: '/teacher/schedule',
     permission: 'schedule.view',
+    children: [
+      {
+        label: 'Pasar lista',
+        icon: 'fa-solid fa-clipboard-check',
+        route: '/teacher/attendance',
+        permission: 'attendance.view',
+      },
+    ],
   },
   {
     label: 'Tus grupos',
     icon: 'fa-solid fa-users',
     route: '/teacher/groups',
     permission: 'groups.view',
+    children: [
+      {
+        label: 'Alumnos',
+        icon: 'fa-solid fa-graduation-cap',
+        route: '/teacher/students',
+        permission: 'students.view',
+      },
+    ],
   },
   {
     label: 'Incidencias',

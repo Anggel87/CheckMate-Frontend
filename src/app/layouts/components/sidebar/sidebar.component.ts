@@ -1,15 +1,16 @@
 import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/authentication/auth.service';
 import { PermissionService } from '../../../core/authorization/permission.service';
 import { getNavigationForRole } from '../../../core/config/navigation.config';
 import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
+import { UserRole, getUserRoleLabel } from '../../../core/enums/user-role.enum';
 import { NavigationItem } from '../../../core/models/menu-item.model';
 
 @Component({
   selector: 'app-sidebar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink],
   template: `
     <aside
       class="checkmate-sidebar"
@@ -18,7 +19,14 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       aria-label="Navegación principal"
     >
       <div class="checkmate-sidebar__brand">
-        <img src="/img/logos/isotipowhite.png" alt="CheckMate" />
+        <a [routerLink]="homeRoute()" (click)="closeMobile.emit()">
+          @if (collapsed) {
+            <strong>CM</strong>
+          } @else {
+            <strong>CheckMate</strong>
+            <span>{{ roleLabel() }}</span>
+          }
+        </a>
       </div>
 
       <button
@@ -34,7 +42,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
         @for (item of menuItems(); track item.route) {
           <a
             class="checkmate-sidebar-link"
-            routerLinkActive="is-active"
+            [class.is-active]="isMenuItemActive(item)"
             [routerLink]="item.route"
             [title]="collapsed ? item.label : ''"
             (click)="closeMobile.emit()"
@@ -48,16 +56,43 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       </nav>
 
       <div class="checkmate-sidebar__footer">
-        <a
-          class="btn-checkmate btn-checkmate-light"
-          [routerLink]="attendanceRoute()"
-          (click)="closeMobile.emit()"
-        >
-          <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
-          @if (!collapsed) {
-            <span>Pasar lista</span>
-          }
-        </a>
+        @if (isStudent()) {
+          <a
+            class="checkmate-sidebar-link"
+            [routerLink]="settingsRoute()"
+            [title]="collapsed ? 'Ajustes' : ''"
+            (click)="closeMobile.emit()"
+          >
+            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+            @if (!collapsed) {
+              <span>Ajustes</span>
+            }
+          </a>
+        } @else {
+          <a
+            class="btn-checkmate btn-checkmate-light"
+            [routerLink]="attendanceRoute()"
+            (click)="closeMobile.emit()"
+          >
+            <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
+            @if (!collapsed) {
+              <span>Pasar lista</span>
+            }
+          </a>
+        }
+        @if (!isStudent()) {
+          <a
+            class="checkmate-sidebar-link"
+            routerLink="/help"
+            [title]="collapsed ? 'Ayuda' : ''"
+            (click)="closeMobile.emit()"
+          >
+            <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
+            @if (!collapsed) {
+              <span>Ayuda</span>
+            }
+          </a>
+        }
         <button
           type="button"
           class="checkmate-sidebar-link checkmate-sidebar-logout"
@@ -69,17 +104,6 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
             <span>Cerrar sesión</span>
           }
         </button>
-        <a
-          class="checkmate-sidebar-link"
-          routerLink="/help"
-          [title]="collapsed ? 'Ayuda' : ''"
-          (click)="closeMobile.emit()"
-        >
-          <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
-          @if (!collapsed) {
-            <span>Ayuda</span>
-          }
-        </a>
       </div>
     </aside>
   `,
@@ -109,9 +133,44 @@ export class SidebarComponent {
     return this.authService.getHomeUrl();
   }
 
+  protected settingsRoute(): string {
+    const role = this.authService.currentUser()?.role;
+    return role ? `${ROUTE_PATHS.rolePrefix[role]}/settings` : this.authService.getHomeUrl();
+  }
+
+  protected homeRoute(): string {
+    return this.authService.getHomeUrl();
+  }
+
+  protected roleLabel(): string {
+    const role = this.authService.currentUser()?.role;
+
+    if (role === UserRole.TEACHER) {
+      return 'Portal del Profesor';
+    }
+
+    return role ? getUserRoleLabel(role) : '';
+  }
+
+  protected isStudent(): boolean {
+    return this.authService.currentUser()?.role === UserRole.STUDENT;
+  }
+
+  protected isMenuItemActive(item: NavigationItem): boolean {
+    return (
+      this.isRouteActive(item.route) ||
+      Boolean(item.children?.some((child) => this.isRouteActive(child.route)))
+    );
+  }
+
   protected signOut(): void {
     this.authService.signOut();
     this.closeMobile.emit();
     void this.router.navigateByUrl('/auth/login');
+  }
+
+  private isRouteActive(route: string): boolean {
+    const currentUrl = this.router.url.split('?')[0];
+    return currentUrl === route || currentUrl.startsWith(`${route}/`);
   }
 }

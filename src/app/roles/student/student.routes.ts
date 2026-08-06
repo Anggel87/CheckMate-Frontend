@@ -18,18 +18,20 @@ export const STUDENT_ROUTES: Routes = [
       {
         path: 'dashboard',
         canActivate: [permissionGuard],
-        data: { permission: 'dashboard.view' },
-        loadChildren: () =>
-          import('../../features/dashboard/dashboard.routes').then(
-            (routes) => routes.DASHBOARD_ROUTES,
+        data: { permission: 'dashboard.view', topbarTitle: 'Inicio' },
+        loadComponent: () =>
+          import('../../features/dashboard/pages/student-dashboard/student-dashboard.component').then(
+            (component) => component.StudentDashboardComponent,
           ),
       },
       {
         path: 'profile',
         canActivate: [permissionGuard],
-        data: { permission: 'profile.view' },
-        loadChildren: () =>
-          import('../../features/profile/profile.routes').then((routes) => routes.PROFILE_ROUTES),
+        data: { permission: 'profile.view', topbarTitle: 'Mi informacion' },
+        loadComponent: () =>
+          import('../../features/profile/pages/student-profile/student-profile.component').then(
+            (component) => component.StudentProfileComponent,
+          ),
       },
       {
         path: 'schedule',
@@ -45,35 +47,109 @@ export const STUDENT_ROUTES: Routes = [
         path: 'subjects',
         canActivate: [permissionGuard],
         data: { permission: 'subjects.view' },
-        loadChildren: () =>
-          import('../../features/subjects/subjects.routes').then(
-            (routes) => routes.SUBJECTS_ROUTES,
-          ),
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Mi informacion' },
+            loadComponent: () =>
+              import('../../features/subjects/pages/student-subjects/student-subjects.component').then(
+                (component) => component.StudentSubjectsComponent,
+              ),
+          },
+          {
+            path: ':subjectId',
+            data: { topbarTitle: 'Mi informacion' },
+            loadComponent: () =>
+              import('../../features/subjects/pages/student-subject-detail/student-subject-detail.component').then(
+                (component) => component.StudentSubjectDetailComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'attendance',
         canActivate: [permissionGuard],
         data: { permission: 'attendance.view' },
-        loadChildren: () =>
-          import('../../features/attendance/attendance.routes').then(
-            (routes) => routes.ATTENDANCE_ROUTES,
-          ),
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Mis asistencias' },
+            loadComponent: () =>
+              import('../../features/attendance/pages/student-attendance-overview/student-attendance-overview.component').then(
+                (component) => component.StudentAttendanceOverviewComponent,
+              ),
+          },
+          {
+            path: 'history',
+            data: { topbarTitle: 'Tus asistencias' },
+            loadComponent: () =>
+              import('../../features/attendance/pages/student-attendance-list/student-attendance-list.component').then(
+                (component) => component.StudentAttendanceListComponent,
+              ),
+          },
+          {
+            path: 'detail/:attendanceId',
+            data: { topbarTitle: 'Mis asistencias' },
+            loadComponent: () =>
+              import('../../features/attendance/pages/student-attendance-detail/student-attendance-detail.component').then(
+                (component) => component.StudentAttendanceDetailComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'claims',
         canActivate: [permissionGuard],
         data: { permission: 'claims.view' },
-        loadChildren: () =>
-          import('../../features/claims/claims.routes').then((routes) => routes.CLAIMS_ROUTES),
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Reclamos' },
+            loadComponent: () =>
+              import('../../features/claims/pages/student-claims/student-claims.component').then(
+                (component) => component.StudentClaimsComponent,
+              ),
+          },
+          {
+            path: 'new',
+            data: { topbarTitle: 'Reclamos' },
+            loadComponent: () =>
+              import('../../features/claims/pages/new-claim/new-claim.component').then(
+                (component) => component.NewClaimComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'justifications',
         canActivate: [permissionGuard],
         data: { permission: 'justifications.view' },
-        loadChildren: () =>
-          import('../../features/justifications/justifications.routes').then(
-            (routes) => routes.JUSTIFICATIONS_ROUTES,
-          ),
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Justificantes' },
+            loadComponent: () =>
+              import('../../features/justifications/pages/student-justifications/student-justifications.component').then(
+                (component) => component.StudentJustificationsComponent,
+              ),
+          },
+          {
+            path: 'select-absence',
+            data: { topbarTitle: 'Justificantes' },
+            loadComponent: () =>
+              import('../../features/justifications/pages/select-absence/select-absence.component').then(
+                (component) => component.SelectAbsenceComponent,
+              ),
+          },
+          {
+            path: 'new',
+            data: { topbarTitle: 'Justificante' },
+            loadComponent: () =>
+              import('../../features/justifications/pages/new-justification/new-justification.component').then(
+                (component) => component.NewJustificationComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'notifications',

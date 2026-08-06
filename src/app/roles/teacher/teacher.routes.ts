@@ -18,7 +18,7 @@ export const TEACHER_ROUTES: Routes = [
       {
         path: 'dashboard',
         canActivate: [permissionGuard],
-        data: { permission: 'dashboard.view' },
+        data: { permission: 'dashboard.view', topbarTitle: 'Dashboard' },
         loadChildren: () =>
           import('../../features/dashboard/dashboard.routes').then(
             (routes) => routes.DASHBOARD_ROUTES,
@@ -27,38 +27,123 @@ export const TEACHER_ROUTES: Routes = [
       {
         path: 'schedule',
         canActivate: [permissionGuard],
-        data: { permission: 'schedule.view' },
-        loadChildren: () =>
-          import('../../features/schedules/schedules.routes').then(
-            (routes) => routes.SCHEDULES_ROUTES,
+        data: { permission: 'schedule.view', topbarTitle: 'Dashboard' },
+        loadComponent: () =>
+          import('../../features/schedules/pages/teacher-today-subjects/teacher-today-subjects.component').then(
+            (component) => component.TeacherTodaySubjectsComponent,
           ),
       },
-      { path: 'schedules', pathMatch: 'full', redirectTo: 'schedule' },
       {
         path: 'students',
         canActivate: [permissionGuard],
         data: { permission: 'students.view' },
-        loadChildren: () =>
-          import('../../features/students/students.routes').then(
-            (routes) => routes.STUDENTS_ROUTES,
-          ),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: '/teacher/groups/1-a/students' },
+          {
+            path: ':studentId',
+            data: { topbarTitle: 'Perfil del alumno' },
+            loadComponent: () =>
+              import('../../features/students/pages/teacher-student-profile/teacher-student-profile.component').then(
+                (component) => component.TeacherStudentProfileComponent,
+              ),
+          },
+          {
+            path: ':studentId/attendance',
+            data: { topbarTitle: 'Tus grupos' },
+            loadComponent: () =>
+              import('../../features/students/pages/teacher-student-attendance/teacher-student-attendance.component').then(
+                (component) => component.TeacherStudentAttendanceComponent,
+              ),
+          },
+          {
+            path: ':studentId/justifications',
+            data: { topbarTitle: 'Justificantes' },
+            loadComponent: () =>
+              import('../../features/students/pages/teacher-student-justifications/teacher-student-justifications.component').then(
+                (component) => component.TeacherStudentJustificationsComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'groups',
         canActivate: [permissionGuard],
         data: { permission: 'groups.view' },
-        loadChildren: () =>
-          import('../../features/groups/groups.routes').then((routes) => routes.GROUPS_ROUTES),
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Mis Grupos' },
+            loadComponent: () =>
+              import('../../features/groups/pages/teacher-groups/teacher-groups.component').then(
+                (component) => component.TeacherGroupsComponent,
+              ),
+          },
+          {
+            path: ':groupId/students',
+            data: { topbarTitle: 'Tus grupos' },
+            loadComponent: () =>
+              import('../../features/groups/pages/teacher-group-students/teacher-group-students.component').then(
+                (component) => component.TeacherGroupStudentsComponent,
+              ),
+          },
+        ],
       },
       {
         path: 'attendance',
         canActivate: [permissionGuard],
         data: { permission: 'attendance.view' },
-        loadChildren: () =>
-          import('../../features/attendance/attendance.routes').then(
-            (routes) => routes.ATTENDANCE_ROUTES,
-          ),
+        children: [
+          { path: '', pathMatch: 'full', redirectTo: 'take/base-datos' },
+          {
+            path: 'take/:classId',
+            data: { topbarTitle: 'Tus materias' },
+            loadComponent: () =>
+              import('../../features/attendance/pages/teacher-take-attendance/teacher-take-attendance.component').then(
+                (component) => component.TeacherTakeAttendanceComponent,
+              ),
+          },
+        ],
       },
+      {
+        path: 'incidents',
+        canActivate: [permissionGuard],
+        data: { permission: 'incidents.view' },
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Incidencias' },
+            loadComponent: () =>
+              import('../../features/incidents/pages/teacher-incidents/teacher-incidents.component').then(
+                (component) => component.TeacherIncidentsComponent,
+              ),
+          },
+          {
+            path: 'new',
+            data: { topbarTitle: 'Incidencias' },
+            loadComponent: () =>
+              import('../../features/incidents/pages/teacher-new-incident/teacher-new-incident.component').then(
+                (component) => component.TeacherNewIncidentComponent,
+              ),
+          },
+          {
+            path: 'emergency-list',
+            data: { topbarTitle: 'Incidencias' },
+            loadComponent: () =>
+              import('../../features/incidents/pages/teacher-emergency-list/teacher-emergency-list.component').then(
+                (component) => component.TeacherEmergencyListComponent,
+              ),
+          },
+          {
+            path: ':incidentId',
+            data: { topbarTitle: 'Incidencias' },
+            loadComponent: () =>
+              import('../../features/incidents/pages/teacher-incident-detail/teacher-incident-detail.component').then(
+                (component) => component.TeacherIncidentDetailComponent,
+              ),
+          },
+        ],
+      },
+      { path: 'emergencies', pathMatch: 'full', redirectTo: 'incidents/new' },
       {
         path: 'claims',
         canActivate: [permissionGuard],
@@ -75,6 +160,7 @@ export const TEACHER_ROUTES: Routes = [
             (routes) => routes.JUSTIFICATIONS_ROUTES,
           ),
       },
+      { path: 'schedules', pathMatch: 'full', redirectTo: 'schedule' },
       {
         path: 'statistics',
         canActivate: [permissionGuard],
@@ -85,30 +171,12 @@ export const TEACHER_ROUTES: Routes = [
           ),
       },
       {
-        path: 'incidents',
-        canActivate: [permissionGuard],
-        data: { permission: 'incidents.view' },
-        loadChildren: () =>
-          import('../../features/incidents/incidents.routes').then(
-            (routes) => routes.INCIDENTS_ROUTES,
-          ),
-      },
-      {
         path: 'notifications',
         canActivate: [permissionGuard],
         data: { permission: 'notifications.view' },
         loadChildren: () =>
           import('../../features/notifications/notifications.routes').then(
             (routes) => routes.NOTIFICATIONS_ROUTES,
-          ),
-      },
-      {
-        path: 'emergencies',
-        canActivate: [permissionGuard],
-        data: { permission: 'emergencies.view' },
-        loadChildren: () =>
-          import('../../features/emergencies/emergencies.routes').then(
-            (routes) => routes.EMERGENCIES_ROUTES,
           ),
       },
       {
