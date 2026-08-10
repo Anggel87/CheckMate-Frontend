@@ -1,29 +1,32 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
+import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
+import { TeacherPortalApiService } from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 type TeacherIncidentControl = 'incidentType' | 'title' | 'description' | 'severity' | 'location';
 
 const INCIDENT_TYPES = [
   {
-    value: 'Fuego',
+    value: 'FIRE',
     label: 'Fuego',
     subtitle: 'Alta prioridad',
     icon: 'fa-solid fa-fire-flame-curved',
     tone: 'danger',
   },
   {
-    value: 'Gas',
+    value: 'GAS',
     label: 'Gas',
     subtitle: 'Peligro quimico',
     icon: 'fa-solid fa-fire-extinguisher',
     tone: 'warning',
   },
   {
-    value: 'Terremoto',
+    value: 'EARTHQUAKE',
     label: 'Terremoto',
     subtitle: 'Desastre natural',
     icon: 'fa-solid fa-wave-square',
@@ -115,9 +118,10 @@ const INCIDENT_TYPES = [
                   [class.is-invalid]="errorFor('severity', 'Severidad')"
                   aria-describedby="incident-severity-error"
                 >
-                  <option value="Critica">Critica</option>
-                  <option value="Alta">Alta</option>
-                  <option value="Media">Media</option>
+                  <option value="CRITICA">Critica</option>
+                  <option value="ALTA">Alta</option>
+                  <option value="MEDIA">Media</option>
+                  <option value="BAJA">Baja</option>
                 </select>
                 <app-form-validation-message
                   id="incident-severity-error"
@@ -180,17 +184,19 @@ const INCIDENT_TYPES = [
   `,
 })
 export class TeacherNewIncidentComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
+  private readonly teacherApi = inject(TeacherPortalApiService);
 
   protected readonly saving = signal(false);
   protected readonly incidentTypes = INCIDENT_TYPES;
   protected readonly form = this.formBuilder.nonNullable.group({
-    incidentType: ['Fuego', Validators.required],
+    incidentType: ['FIRE', Validators.required],
     title: ['', [Validators.required, Validators.maxLength(120)]],
-    description: ['', [Validators.required, Validators.maxLength(700)]],
-    severity: ['Critica', Validators.required],
+    description: ['', [Validators.required, Validators.maxLength(500)]],
+    severity: ['CRITICA', Validators.required],
     location: ['', [Validators.required, Validators.maxLength(160)]],
   });
 
@@ -210,10 +216,31 @@ export class TeacherNewIncidentComponent {
     }
 
     this.saving.set(true);
-    window.setTimeout(() => {
-      this.saving.set(false);
-      this.toastService.success('Incidente registrado', 'Continua con la verificacion de alumnos.');
-      void this.router.navigateByUrl('/teacher/incidents/emergency-list');
-    }, 500);
+    const value = this.form.getRawValue();
+
+    this.teacherApi
+      .createIncident({
+        type: value.incidentType,
+        title: value.title,
+        description: `${value.description}\nUbicacion reportada: ${value.location}`,
+        severity: value.severity,
+      })
+      .pipe(
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.toastService.success('Incidente registrado', 'Continua con la verificacion de alumnos.');
+          void this.router.navigateByUrl(`${this.incidentBaseRoute()}/emergency-list`);
+        },
+        error: () => {
+          this.toastService.error('No se pudo registrar', 'La API rechazo el incidente.');
+        },
+      });
+  }
+
+  private incidentBaseRoute(): string {
+    return this.router.url.startsWith('/tutor') ? '/tutor/incidents' : '/teacher/incidents';
   }
 }

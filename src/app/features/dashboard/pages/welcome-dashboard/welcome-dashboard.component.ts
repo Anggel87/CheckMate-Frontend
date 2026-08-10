@@ -1,16 +1,18 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../../core/authentication/auth.service';
 import { ROUTE_PATHS } from '../../../../core/constants/route-paths.constants';
 import { UserRole } from '../../../../core/enums/user-role.enum';
-import {
-  DASHBOARD_METRICS_BY_ROLE,
-  DASHBOARD_STUDENTS,
-  TODAY_CLASSES,
-} from '../../../../core/mocks/dashboard.mock';
 import { CardComponent } from '../../../../shared/components/card/card.component';
 import { PageHeaderComponent } from '../../../../shared/components/page-header/page-header.component';
 import { StatCardComponent } from '../../../../shared/components/stat-card/stat-card.component';
+import {
+  DashboardDataService,
+  DashboardMetric,
+  DashboardStudent,
+  TodayClass,
+} from '../../data-access/dashboard-data.service';
 
 @Component({
   selector: 'app-welcome-dashboard',
@@ -21,30 +23,32 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
       <div class="dashboard-page__hero">
         <app-page-header [title]="welcomeTitle()" [description]="welcomeDescription()" />
 
-        <aside class="next-class-card" aria-label="Próxima clase">
-          <div class="next-class-card__header">
-            <div>
-              <span>Próxima clase en</span>
-              <strong>15 <small>minutos</small></strong>
+        @if (nextClass) {
+          <aside class="next-class-card" aria-label="Proxima clase">
+            <div class="next-class-card__header">
+              <div>
+                <span>Proxima clase</span>
+                <strong>{{ nextClass.time }}</strong>
+              </div>
+              <span class="next-class-card__icon" aria-hidden="true">
+                <i class="fa-solid fa-clock"></i>
+              </span>
             </div>
-            <span class="next-class-card__icon" aria-hidden="true">
-              <i class="fa-solid fa-clock"></i>
-            </span>
-          </div>
-          <div class="next-class-card__footer">
-            <div>
-              <b>Base de datos</b>
-              <small>Grupo 1-A • Aula 204</small>
+            <div class="next-class-card__footer">
+              <div>
+                <b>{{ nextClass.subject }}</b>
+                <small>{{ nextClass.group }}</small>
+              </div>
+              <a class="btn-checkmate btn-checkmate-light" [routerLink]="classRoute(nextClass)"
+                >Iniciar</a
+              >
             </div>
-            <a class="btn-checkmate btn-checkmate-light" [routerLink]="attendanceRoute()"
-              >Iniciar</a
-            >
-          </div>
-        </aside>
+          </aside>
+        }
       </div>
 
       <section class="stats-grid" aria-label="Resumen">
-        @for (metric of metrics(); track metric.title) {
+        @for (metric of metrics; track metric.title) {
           <app-stat-card
             [title]="metric.title"
             [value]="metric.value"
@@ -63,13 +67,10 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
               <h2>Materias de hoy</h2>
               <p>{{ todayClasses.length }} sesiones programadas</p>
             </div>
-            <button type="button" class="icon-button" aria-label="Más opciones">
-              <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
-            </button>
           </div>
 
           <div class="class-list">
-            @for (classItem of todayClasses; track classItem.subject) {
+            @for (classItem of todayClasses; track classItem.subject + classItem.time) {
               <article class="class-row" [class.is-active]="classItem.status === 'active'">
                 <span class="class-row__group">{{ classItem.group }}</span>
                 <div>
@@ -79,14 +80,16 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
                     {{ classItem.time }}
                   </small>
                 </div>
-                <button
-                  type="button"
+                <a
                   class="icon-button"
+                  [routerLink]="classRoute(classItem)"
                   [attr.aria-label]="'Abrir ' + classItem.subject"
                 >
                   <i [class]="classActionIcon(classItem.status)" aria-hidden="true"></i>
-                </button>
+                </a>
               </article>
+            } @empty {
+              <p class="dropdown-empty">Sin sesiones de hoy para este rol.</p>
             }
           </div>
         </app-card>
@@ -94,23 +97,13 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
         <app-card>
           <div class="panel-heading">
             <div>
-              <h2>Tus alumnos</h2>
-              <p>Directorio rápido</p>
+              <h2>Alumnos</h2>
+              <p>Directorio obtenido desde la API</p>
             </div>
-            <div class="segmented-control" aria-label="Carrera">
-              <button type="button" class="is-active">TICS</button>
-              <button type="button">Mecatrónica</button>
-            </div>
-          </div>
-
-          <div class="chip-row" aria-label="Grupos">
-            <button type="button" class="is-active">Grupo 1-A</button>
-            <button type="button">Grupo 1-B</button>
-            <button type="button">Grupo 2-A</button>
           </div>
 
           <div class="student-list">
-            @for (student of students; track student.enrollment) {
+            @for (student of students; track student.enrollment + student.name) {
               <article class="student-row">
                 @if (student.avatarUrl) {
                   <img
@@ -123,7 +116,7 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
                 }
                 <div>
                   <strong>{{ student.name }}</strong>
-                  <small>Matrícula: {{ student.enrollment }}</small>
+                  <small>Matricula: {{ student.enrollment }}</small>
                 </div>
                 <span
                   class="student-row__status"
@@ -131,10 +124,9 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
                   [title]="statusLabel(student.status)"
                   aria-hidden="true"
                 ></span>
-                <button type="button" class="icon-button" [attr.aria-label]="'Ver ' + student.name">
-                  <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-                </button>
               </article>
+            } @empty {
+              <p class="dropdown-empty">Sin alumnos disponibles para este dashboard.</p>
             }
           </div>
 
@@ -150,27 +142,48 @@ import { StatCardComponent } from '../../../../shared/components/stat-card/stat-
   `,
 })
 export class WelcomeDashboardComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly authService = inject(AuthService);
+  private readonly dashboardData = inject(DashboardDataService);
 
-  protected readonly todayClasses = TODAY_CLASSES;
-  protected readonly students = DASHBOARD_STUDENTS;
+  protected metrics: DashboardMetric[] = [];
+  protected todayClasses: TodayClass[] = [];
+  protected students: DashboardStudent[] = [];
+  protected nextClass: TodayClass | null = null;
+
+  constructor() {
+    this.dashboardData
+      .getDashboard()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((dashboard) => {
+        this.metrics = dashboard.metrics;
+        this.todayClasses = dashboard.todayClasses;
+        this.students = dashboard.students;
+        this.nextClass = dashboard.nextClass;
+      });
+  }
 
   protected welcomeTitle(): string {
     return `Bienvenido, ${this.dashboardRoleName()}`;
   }
 
   protected welcomeDescription(): string {
-    return `Hoy es ${this.todayLabel()}. Aquí tienes el resumen de tus actividades.`;
-  }
-
-  protected metrics() {
-    const role = this.authService.currentUser()?.role;
-    return role ? DASHBOARD_METRICS_BY_ROLE[role] : [];
+    return `Hoy es ${this.todayLabel()}. Aqui tienes el resumen con datos de la API.`;
   }
 
   protected attendanceRoute(): string {
     const role = this.authService.currentUser()?.role;
     return role ? `${ROUTE_PATHS.rolePrefix[role]}/attendance` : this.authService.getHomeUrl();
+  }
+
+  protected classRoute(classItem: TodayClass): string {
+    const role = this.authService.currentUser()?.role;
+
+    if ((role === UserRole.TEACHER || role === UserRole.TUTOR_TEACHER) && classItem.scheduleId) {
+      return `${ROUTE_PATHS.rolePrefix[role]}/attendance/take/${classItem.scheduleId}`;
+    }
+
+    return this.attendanceRoute();
   }
 
   protected studentsActionRoute(): string {

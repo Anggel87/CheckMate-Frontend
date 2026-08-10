@@ -1,6 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { STUDENT_PROFILE } from '../../../../core/mocks/student.mock';
+import {
+  EMPTY_STUDENT_PROFILE,
+  StudentPortalApiService,
+  StudentProfileView,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-student-profile',
@@ -25,7 +30,7 @@ import { STUDENT_PROFILE } from '../../../../core/mocks/student.mock';
           <img
             class="student-profile-card__avatar"
             [src]="profile.avatarUrl"
-            alt="Foto de perfil de Juan Ramirez"
+            [alt]="'Foto de perfil de ' + profile.name"
           />
 
           <div class="student-profile-card__content">
@@ -56,8 +61,8 @@ import { STUDENT_PROFILE } from '../../../../core/mocks/student.mock';
             <span>Asistencia Total</span>
             <strong>{{ profile.attendanceTotal }}%</strong>
           </div>
-          <div class="student-progress" aria-label="Asistencia total 98%">
-            <span style="width: 98%"></span>
+          <div class="student-progress" [attr.aria-label]="'Asistencia total ' + profile.attendanceTotal + '%'">
+            <span [style.width.%]="profile.attendanceTotal"></span>
           </div>
         </article>
       </section>
@@ -136,5 +141,17 @@ import { STUDENT_PROFILE } from '../../../../core/mocks/student.mock';
   `,
 })
 export class StudentProfileComponent {
-  protected readonly profile = STUDENT_PROFILE;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly studentApi = inject(StudentPortalApiService);
+
+  protected profile: StudentProfileView = EMPTY_STUDENT_PROFILE;
+
+  constructor() {
+    this.studentApi
+      .getDashboard()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((dashboard) => {
+        this.profile = dashboard.profile;
+      });
+  }
 }

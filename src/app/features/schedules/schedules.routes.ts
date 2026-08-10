@@ -1,15 +1,14 @@
 import { Routes } from '@angular/router';
 
+const loadManagementWorkspace = () =>
+  import('../management/pages/management-workspace/management-workspace.component').then(
+    (component) => component.ManagementWorkspaceComponent,
+  );
+
 export const SCHEDULES_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
-      ),
-    data: {
-      title: 'Horarios',
-      description: 'Consulta clases, aulas y sesiones programadas.',
-    },
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'schedules', topbarTitle: 'Horarios' },
   },
 ];

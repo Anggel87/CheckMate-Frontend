@@ -1,6 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { TEACHER_TODAY_CLASSES } from '../../../../core/mocks/teacher.mock';
+import {
+  TeacherClassView,
+  TeacherPortalApiService,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
   selector: 'app-teacher-today-subjects',
@@ -11,12 +15,14 @@ import { TEACHER_TODAY_CLASSES } from '../../../../core/mocks/teacher.mock';
       <header class="teacher-page__header">
         <div>
           <h1>Tus materias de hoy</h1>
-          <p>Jueves, 24 de Octubre</p>
+          <p>{{ todayLabel() }}</p>
         </div>
-        <span class="teacher-inline-pill">
-          <i class="fa-regular fa-clock" aria-hidden="true"></i>
-          Proxima clase en 45 min
-        </span>
+        @if (nextClass()) {
+          <span class="teacher-inline-pill">
+            <i class="fa-regular fa-clock" aria-hidden="true"></i>
+            Proxima clase: {{ nextClass()?.subject }}
+          </span>
+        }
       </header>
 
       <div class="teacher-page__split teacher-page__split--summary">
@@ -49,16 +55,19 @@ import { TEACHER_TODAY_CLASSES } from '../../../../core/mocks/teacher.mock';
               @if (classItem.status === 'active') {
                 <a
                   class="btn-checkmate btn-checkmate-primary"
-                  [routerLink]="['/teacher/attendance/take', classItem.id]"
+                  [routerLink]="['/teacher/attendance/take', classItem.scheduleId]"
                 >
                   <span>Entrar a clase</span>
                   <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
                 </a>
               } @else if (classItem.status === 'next') {
-                <button type="button" class="btn-checkmate btn-checkmate-secondary">
+                <a
+                  class="btn-checkmate btn-checkmate-secondary"
+                  [routerLink]="['/teacher/attendance/take', classItem.scheduleId]"
+                >
                   <span>Preparar</span>
                   <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i>
-                </button>
+                </a>
               } @else {
                 <button
                   type="button"
@@ -69,6 +78,10 @@ import { TEACHER_TODAY_CLASSES } from '../../../../core/mocks/teacher.mock';
                 </button>
               }
             </article>
+          } @empty {
+            <article class="teacher-card">
+              <p class="dropdown-empty">No hay clases programadas hoy en la API.</p>
+            </article>
           }
         </section>
 
@@ -76,16 +89,16 @@ import { TEACHER_TODAY_CLASSES } from '../../../../core/mocks/teacher.mock';
           <h2>Resumen del dia</h2>
           <div class="teacher-summary-line">
             <span><i class="fa-regular fa-clipboard" aria-hidden="true"></i> Total clases</span>
-            <strong>3</strong>
+            <strong>{{ classes.length }}</strong>
           </div>
           <div class="teacher-summary-line">
-            <span><i class="fa-solid fa-users" aria-hidden="true"></i> Alumnos esperados</span>
-            <strong>85</strong>
+            <span><i class="fa-solid fa-users" aria-hidden="true"></i> Sesiones abiertas</span>
+            <strong>{{ openSessions() }}</strong>
           </div>
           <div class="teacher-progress-block">
             <span>Progreso del dia</span>
             <div class="teacher-progress" aria-hidden="true">
-              <span style="width: 32%"></span>
+              <span [style.width.%]="progress()"></span>
             </div>
           </div>
         </aside>
@@ -94,5 +107,45 @@ import { TEACHER_TODAY_CLASSES } from '../../../../core/mocks/teacher.mock';
   `,
 })
 export class TeacherTodaySubjectsComponent {
-  protected readonly classes = TEACHER_TODAY_CLASSES;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly teacherApi = inject(TeacherPortalApiService);
+
+  protected classes: TeacherClassView[] = [];
+
+  constructor() {
+    this.teacherApi
+      .getTodayClasses()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((classes) => {
+        this.classes = classes;
+      });
+  }
+
+  protected nextClass(): TeacherClassView | undefined {
+    return this.classes.find((classItem) => classItem.status === 'active' || classItem.status === 'next');
+  }
+
+  protected openSessions(): number {
+    return this.classes.filter((classItem) => classItem.status === 'active').length;
+  }
+
+  protected progress(): number {
+    if (!this.classes.length) {
+      return 0;
+    }
+
+    return Math.round(
+      (this.classes.filter((classItem) => classItem.status === 'done').length / this.classes.length) * 100,
+    );
+  }
+
+  protected todayLabel(): string {
+    const label = new Intl.DateTimeFormat('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date());
+
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
 }

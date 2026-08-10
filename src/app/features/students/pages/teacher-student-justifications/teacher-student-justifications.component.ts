@@ -1,10 +1,13 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import {
-  TEACHER_STUDENT_JUSTIFICATIONS,
-  TEACHER_STUDENT_PROFILE,
-} from '../../../../core/mocks/teacher.mock';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import {
+  EMPTY_TEACHER_STUDENT_PROFILE,
+  TeacherJustificationHistoryView,
+  TeacherPortalApiService,
+  TeacherStudentProfileView,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
   selector: 'app-teacher-student-justifications',
@@ -15,7 +18,7 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
       <nav class="teacher-profile-route" aria-label="Ruta de navegacion">
         <a routerLink="/teacher/groups">Mis grupos</a>
         <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-        <a routerLink="/teacher/groups/1-a/students">Alejandro Gomez</a>
+        <a [routerLink]="['/teacher/students', student.id]">{{ student.fullName || 'Alumno' }}</a>
         <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
         <strong>Justificantes</strong>
       </nav>
@@ -23,22 +26,14 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
       <article class="teacher-student-inline-profile">
         <img [src]="student.avatarUrl" [alt]="'Foto de ' + student.fullName" />
         <div>
-          <h1>Alejandro Gomez Perez</h1>
-          <p>Matricula: A01234567 • Grupo: 4B</p>
+          <h1>{{ student.fullName || 'Alumno' }}</h1>
+          <p>Matricula: {{ student.enrollment }} - Grupo: {{ student.group }}</p>
         </div>
       </article>
 
       <section class="teacher-table-card" aria-label="Historial de justificantes">
         <header class="teacher-table-card__header">
           <h2>Historial de Justificantes</h2>
-          <div class="teacher-filter-actions">
-            <button type="button" class="teacher-filter-button">
-              Filtrar por fecha <i class="fa-solid fa-chevron-down"></i>
-            </button>
-            <button type="button" class="teacher-filter-button">
-              Todos los tipos <i class="fa-solid fa-chevron-down"></i>
-            </button>
-          </div>
         </header>
 
         <div class="teacher-table teacher-justifications-table">
@@ -63,25 +58,43 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
                 <i class="fa-regular fa-eye" aria-hidden="true"></i>
               </button>
             </div>
+          } @empty {
+            <div class="teacher-table__row">
+              <span>Sin justificantes expuestos por la API para este alumno.</span>
+            </div>
           }
         </div>
 
         <footer class="teacher-table-footer">
-          <span>Mostrando 3 justificantes</span>
-          <div>
-            <button type="button" class="icon-button" aria-label="Pagina anterior">
-              <i class="fa-solid fa-chevron-left"></i>
-            </button>
-            <button type="button" class="icon-button" aria-label="Pagina siguiente">
-              <i class="fa-solid fa-chevron-right"></i>
-            </button>
-          </div>
+          <span>Mostrando {{ records.length }} justificantes</span>
         </footer>
       </section>
     </section>
   `,
 })
 export class TeacherStudentJustificationsComponent {
-  protected readonly student = TEACHER_STUDENT_PROFILE;
-  protected readonly records = TEACHER_STUDENT_JUSTIFICATIONS;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly teacherApi = inject(TeacherPortalApiService);
+
+  protected student: TeacherStudentProfileView = EMPTY_TEACHER_STUDENT_PROFILE;
+  protected records: TeacherJustificationHistoryView[] = [];
+
+  constructor() {
+    const studentId = this.route.snapshot.paramMap.get('studentId');
+
+    this.teacherApi
+      .getStudentProfile(studentId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((student) => {
+        this.student = student;
+      });
+
+    this.teacherApi
+      .getStudentJustifications(studentId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((records) => {
+        this.records = records;
+      });
+  }
 }

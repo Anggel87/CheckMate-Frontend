@@ -1,0 +1,813 @@
+import { Injectable, inject } from '@angular/core';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { Observable, catchError, forkJoin, from, map, of, switchMap, throwError } from 'rxjs';
+import { environment } from '../../../../environments/environment';
+import { AuthService } from '../../../core/authentication/auth.service';
+import { UserRole } from '../../../core/enums/user-role.enum';
+import {
+  EMPTY_MANAGEMENT_SNAPSHOT,
+  IncidentCreatePayload,
+  ManagementAuditLog,
+  ManagementCharts,
+  ManagementClaim,
+  ManagementDevice,
+  ManagementGroup,
+  ManagementIncident,
+  ManagementJustification,
+  ManagementSchedule,
+  ManagementSnapshot,
+  ManagementStatus,
+  ManagementStudent,
+  ManagementSubject,
+  ManagementTeacher,
+} from '../models/management.model';
+
+type UnknownRecord = Record<string, unknown>;
+
+@Injectable({
+  providedIn: 'root',
+})
+export class ManagementDataService {
+  private readonly authService = inject(AuthService);
+  private readonly api: AxiosInstance = axios.create({
+    baseURL: environment.checkmateApiUrl,
+    timeout: 12000,
+  });
+
+  getSnapshot(): Observable<ManagementSnapshot> {
+    return forkJoin({
+      groups: this.getGroups().pipe(catchError(() => of([]))),
+      students: this.getStudents().pipe(catchError(() => of([]))),
+      teachers: this.getTeachers().pipe(catchError(() => of([]))),
+      subjects: this.getSubjects().pipe(catchError(() => of([]))),
+      schedules: this.getSchedules().pipe(catchError(() => of([]))),
+      justifications: this.getJustifications().pipe(catchError(() => of([]))),
+      devices: this.getDevices().pipe(catchError(() => of([]))),
+      incidents: this.getIncidents().pipe(catchError(() => of([]))),
+      claims: this.getClaims().pipe(catchError(() => of([]))),
+      logs: this.getLogs('students').pipe(catchError(() => of([]))),
+      charts: this.getCharts().pipe(catchError(() => of(EMPTY_MANAGEMENT_SNAPSHOT.charts))),
+    });
+  }
+
+  getGroups(): Observable<ManagementGroup[]> {
+    return this.getCollection(`${this.scopeBase()}/groups`, (item, index) => this.toGroup(item, index));
+  }
+
+  getStudents(): Observable<ManagementStudent[]> {
+    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
+      return this.getGroups().pipe(
+        map((groups) => groups[0]?.id),
+        switchMap((groupId) =>
+          groupId
+            ? this.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
+                this.toStudent(item, index),
+              )
+            : of([]),
+        ),
+      );
+    }
+
+    if (this.currentRole() === UserRole.ADMIN) {
+      return this.getCollection(`${this.adminBase()}/students`, (item, index) =>
+        this.toStudent(item, index),
+      );
+    }
+
+    return of([]);
+  }
+
+  getTeachers(): Observable<ManagementTeacher[]> {
+    return this.getCollection(`${this.scopeBase()}/teachers`, (item, index) =>
+      this.toTeacher(item, index),
+    );
+  }
+
+  getSubjects(): Observable<ManagementSubject[]> {
+    if (this.currentRole() === UserRole.ADMIN) {
+      return this.getCollection(`${this.adminBase()}/subjects`, (item, index) =>
+        this.toSubject(item, index),
+      );
+    }
+
+    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
+      return this.getSchedules().pipe(map((schedules) => this.subjectsFromSchedules(schedules)));
+    }
+
+    return of([]);
+  }
+
+  getSchedules(): Observable<ManagementSchedule[]> {
+    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
+      return this.getGroups().pipe(
+        map((groups) => groups[0]?.id),
+        switchMap((groupId) =>
+          groupId
+            ? this.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
+                this.toSchedule(item, index),
+              )
+            : of([]),
+        ),
+      );
+    }
+
+    return of([]);
+  }
+
+  getJustifications(): Observable<ManagementJustification[]> {
+    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
+      return this.getStudents().pipe(
+        map((students) => students[0]?.id),
+        switchMap((studentId) =>
+          studentId
+            ? this.getCollection(`${this.directorBase()}/students/${studentId}/justifications`, (item, index) =>
+                this.toJustification(item, index),
+              )
+            : of([]),
+        ),
+      );
+    }
+
+    return of([]);
+  }
+
+  getDevices(): Observable<ManagementDevice[]> {
+    return this.getCollection(`${this.scopeBase()}/devices`, (item, index) =>
+      this.toDevice(item, index),
+    );
+  }
+
+  getIncidents(): Observable<ManagementIncident[]> {
+    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+      return of([]);
+    }
+
+    return this.getCollection(`${this.directorBase()}/incidents`, (item, index) =>
+      this.toIncident(item, index),
+    );
+  }
+
+  getClaims(): Observable<ManagementClaim[]> {
+    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
+      return this.getCollection(`${this.directorBase()}/claims`, (item, index) =>
+        this.toClaim(item, index),
+      );
+    }
+
+    if (this.currentRole() === UserRole.TUTOR_TEACHER) {
+      return this.getCollection(`${this.tutorBase()}/claims`, (item, index) =>
+        this.toClaim(item, index),
+      );
+    }
+
+    return of([]);
+  }
+
+  getLogs(entity: ManagementAuditLog['entity']): Observable<ManagementAuditLog[]> {
+    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+      return of([]);
+    }
+
+    return this.getCollection(`${this.directorBase()}/logs/${entity}`, (item, index) =>
+      this.toLog(item, index, entity),
+    );
+  }
+
+  getCharts(): Observable<ManagementCharts> {
+    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+      return of(EMPTY_MANAGEMENT_SNAPSHOT.charts);
+    }
+
+    return forkJoin({
+      general: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/general` }).pipe(
+        catchError(() => of(null)),
+      ),
+      incidents: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/incidents` }).pipe(
+        catchError(() => of(null)),
+      ),
+      absences: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/absences` }).pipe(
+        catchError(() => of(null)),
+      ),
+      justifications: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/justifications` }).pipe(
+        catchError(() => of(null)),
+      ),
+    }).pipe(map((response) => this.toCharts(response, EMPTY_MANAGEMENT_SNAPSHOT.charts)));
+  }
+
+  createIncident(payload: IncidentCreatePayload): Observable<boolean> {
+    const formData = new FormData();
+    formData.set('title', payload.title);
+    formData.set('description', payload.description);
+    formData.set('type', payload.type);
+    formData.set('severity', payload.severity);
+    formData.set('location', payload.location);
+    formData.set('schedule_id', payload.scheduleId);
+    payload.studentIds.forEach((studentId) => formData.append('student_ids[]', studentId));
+
+    if (payload.evidence) {
+      formData.set('evidence', payload.evidence);
+    }
+
+    return this.request<unknown>({ method: 'POST', url: `${this.directorBase()}/incidents`, data: formData }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  closeIncident(incidentId: string, resolution: string): Observable<boolean> {
+    return this.request<unknown>({
+      method: 'POST',
+      url: `${this.directorBase()}/incidents/${incidentId}/close`,
+      data: { resolution },
+    }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  updateIncidentStudents(incident: ManagementIncident, notes: string): Observable<boolean> {
+    return this.request<unknown>({
+      method: 'PATCH',
+      url: `${this.directorBase()}/incidents/${incident.id}/students`,
+      data: {
+        students: incident.roster.map((item) => ({
+          student_id: item.studentId,
+          status: item.status,
+          notes,
+        })),
+      },
+    }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  updateClaimAction(claimId: string, action: string, comment: string): Observable<boolean> {
+    const base = this.currentRole() === UserRole.TUTOR_TEACHER ? this.tutorBase() : this.directorBase();
+    return this.request<unknown>({
+      method: 'PATCH',
+      url: `${base}/claims/${claimId}/action`,
+      data: { action, comment },
+    }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  pingDevice(deviceId: string): Observable<boolean> {
+    return this.request<unknown>({ method: 'GET', url: `${this.scopeBase()}/devices/${deviceId}/ping` }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  updateDevice(deviceId: string, payload: { ipAddress: string; isActive: boolean }): Observable<boolean> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of(false);
+    }
+
+    return this.request<unknown>({
+      method: 'PUT',
+      url: `${this.adminBase()}/devices/${deviceId}`,
+      data: {
+        ip: payload.ipAddress,
+        is_active: payload.isActive,
+      },
+    }).pipe(
+      map(() => true),
+      catchError(() => of(false)),
+    );
+  }
+
+  private getCollection<T>(
+    url: string,
+    adapter: (item: unknown, index: number) => T,
+    params?: UnknownRecord,
+  ): Observable<T[]> {
+    return this.request<unknown>({ method: 'GET', url, params }).pipe(
+      map((response) => this.extractCollection(response).map(adapter)),
+    );
+  }
+
+  private request<T>(config: AxiosRequestConfig): Observable<T> {
+    return from(
+      this.api.request<T>({
+        ...config,
+        headers: {
+          ...config.headers,
+          ...this.authHeaders(),
+        },
+      }),
+    ).pipe(
+      map((response) => response.data),
+      catchError((error: unknown) => throwError(() => error)),
+    );
+  }
+
+  private authHeaders(): Record<string, string> {
+    const user = this.authService.currentUser();
+
+    if (!user?.token) {
+      return {};
+    }
+
+    return {
+      Authorization: `${user.tokenType ?? 'Bearer'} ${user.token}`,
+    };
+  }
+
+  private extractCollection(response: unknown): unknown[] {
+    const data = this.unwrapData(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    const record = toRecord(data);
+    const nestedData = record ? record['data'] : null;
+    return Array.isArray(nestedData) ? nestedData : [];
+  }
+
+  private unwrapData(response: unknown): unknown {
+    const record = toRecord(response);
+    return record && 'data' in record ? record['data'] : response;
+  }
+
+  private scopeBase(): string {
+    return this.currentRole() === UserRole.CAREER_DIRECTOR ? this.directorBase() : this.adminBase();
+  }
+
+  private adminBase(): string {
+    return `${environment.checkmateApiUrl}/administrador`;
+  }
+
+  private directorBase(): string {
+    return `${environment.checkmateApiUrl}/director-carrera`;
+  }
+
+  private tutorBase(): string {
+    return `${environment.checkmateApiUrl}/tutor`;
+  }
+
+  private currentRole(): UserRole | undefined {
+    return this.authService.currentUser()?.role;
+  }
+
+  private subjectsFromSchedules(schedules: ManagementSchedule[]): ManagementSubject[] {
+    const unique = new Map<string, ManagementSubject>();
+
+    schedules.forEach((schedule) => {
+      if (unique.has(schedule.subject)) {
+        return;
+      }
+
+      unique.set(schedule.subject, {
+        id: schedule.id,
+        name: schedule.subject,
+        group: schedule.group,
+        semester: 'Horario activo',
+        teacher: schedule.teacher,
+        schedule: schedule.time,
+        classroom: schedule.classroom,
+      });
+    });
+
+    return [...unique.values()];
+  }
+
+  private toGroup(value: unknown, index: number): ManagementGroup {
+    const record = toRecord(value);
+    const fallback = emptyGroup(index);
+    const career = toRecord(record?.['career']);
+
+    return {
+      id: readId(record, fallback.id),
+      label: readString(record, 'label', `${readString(record, 'grade', '10')}${readString(record, 'section', 'A')}`),
+      career: readString(career, 'short_name', readString(career, 'name', fallback.career)),
+      shift: readString(record, 'shift', fallback.shift),
+      studentCount: readNumber(record, 'student_count', fallback.studentCount),
+      attendanceRate: readNumber(record, 'attendance_rate', fallback.attendanceRate),
+      tutor: readString(record, 'tutor_name', fallback.tutor),
+    };
+  }
+
+  private toStudent(value: unknown, index: number): ManagementStudent {
+    const record = toRecord(value);
+    const fallback = emptyStudent(index);
+    const group = toRecord(record?.['group']);
+    const career = toRecord(group?.['career']);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      controlNumber: readString(record, 'control_number', fallback.controlNumber),
+      name: readString(record, 'full_name', readString(record, 'name', fallback.name)),
+      group: readString(group, 'label', fallback.group),
+      career: readString(career, 'name', fallback.career),
+      email: readString(record, 'email', fallback.email),
+      phone: readString(record, 'phone', fallback.phone),
+      attendanceRate: readNumber(record, 'attendance_rate', fallback.attendanceRate),
+      status: readBoolean(record, 'active', true)
+        ? { label: 'Activo', tone: 'success' }
+        : { label: 'Inactivo', tone: 'neutral' },
+    };
+  }
+
+  private toTeacher(value: unknown, index: number): ManagementTeacher {
+    const record = toRecord(value);
+    const fallback = emptyTeacher(index);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      name: readString(record, 'full_name', readString(record, 'name', fallback.name)),
+      employeeNumber: readString(record, 'employee_number', fallback.employeeNumber),
+      email: readString(record, 'email', fallback.email),
+      phone: readString(record, 'phone', fallback.phone),
+      schedulesCount: readNumber(record, 'schedules_count', fallback.schedulesCount),
+      status: readBoolean(record, 'active', true)
+        ? { label: 'Activo', tone: 'success' }
+        : { label: 'Inactivo', tone: 'neutral' },
+    };
+  }
+
+  private toSubject(value: unknown, index: number): ManagementSubject {
+    const record = toRecord(value);
+    const fallback = emptySubject(index);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      name: readString(record, 'name', fallback.name),
+      semester: readString(record, 'semester', fallback.semester),
+    };
+  }
+
+  private toSchedule(value: unknown, index: number): ManagementSchedule {
+    const record = toRecord(value);
+    const fallback = emptySchedule(index);
+    const subject = toRecord(record?.['subject']);
+    const teacher = toRecord(record?.['teacher']);
+    const classroom = toRecord(record?.['classroom']);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      day: readString(record, 'day_of_week', fallback.day),
+      time: `${readString(record, 'start_time', fallback.time.split(' - ')[0] ?? '')} - ${readString(
+        record,
+        'end_time',
+        fallback.time.split(' - ')[1] ?? '',
+      )}`,
+      subject: readString(subject, 'name', fallback.subject),
+      teacher: readString(teacher, 'full_name', fallback.teacher),
+      classroom: readString(classroom, 'name', fallback.classroom),
+    };
+  }
+
+  private toJustification(value: unknown, index: number): ManagementJustification {
+    const record = toRecord(value);
+    const fallback = emptyJustification(index);
+    const subject = toRecord(record?.['subject']);
+    const status = readString(record, 'status', fallback.status.label);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      subject: readString(subject, 'name', fallback.subject),
+      reason: readString(record, 'reason', fallback.reason),
+      status: statusFromLabel(status),
+    };
+  }
+
+  private toDevice(value: unknown, index: number): ManagementDevice {
+    const record = toRecord(value);
+    const fallback = emptyDevice(index);
+    const classroom = toRecord(record?.['classroom']);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      name: readString(record, 'name', readString(classroom, 'name', fallback.name)),
+      macAddress: readString(record, 'mac_address', fallback.macAddress),
+      ipAddress: readString(record, 'ip', fallback.ipAddress),
+      classroom: readString(classroom, 'name', fallback.classroom),
+      status: readBoolean(record, 'is_active', true)
+        ? { label: 'Online', tone: 'success' }
+        : { label: 'Offline', tone: 'danger' },
+    };
+  }
+
+  private toIncident(value: unknown, index: number): ManagementIncident {
+    const record = toRecord(value);
+    const fallback = emptyIncident(index);
+    const reporter = toRecord(record?.['reporter']);
+    const status = readString(record, 'status', fallback.status.label);
+    const severity = readString(record, 'severity', fallback.severity.label);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      title: readString(record, 'title', fallback.title),
+      type: readString(record, 'type', fallback.type),
+      location: readString(record, 'location', fallback.location),
+      reportedBy: readString(reporter, 'full_name', fallback.reportedBy),
+      date: readString(record, 'created_at', fallback.date),
+      description: readString(record, 'description', fallback.description),
+      status: statusFromLabel(status),
+      severity: statusFromLabel(severity),
+    };
+  }
+
+  private toClaim(value: unknown, index: number): ManagementClaim {
+    const record = toRecord(value);
+    const fallback = emptyClaim(index);
+    const student = toRecord(record?.['student']);
+    const group = toRecord(student?.['group']);
+    const subject = toRecord(record?.['subject']);
+    const status = readString(record, 'status', fallback.status.label);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      studentName: readString(student, 'full_name', fallback.studentName),
+      group: readString(group, 'label', fallback.group),
+      subject: readString(subject, 'name', fallback.subject),
+      description: readString(record, 'description', fallback.description),
+      evidenceUrl: readString(record, 'evidence_url', fallback.evidenceUrl),
+      date: readString(record, 'created_at', fallback.date),
+      status: statusFromLabel(status),
+    };
+  }
+
+  private toLog(value: unknown, index: number, entity: ManagementAuditLog['entity']): ManagementAuditLog {
+    const record = toRecord(value);
+    const fallback = emptyLog(index, entity);
+    const performedBy = toRecord(record?.['performed_by']);
+    const action = readString(record, 'action', fallback.description);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      entity,
+      date: readString(record, 'created_at', fallback.date),
+      description: action,
+      performedBy: readString(performedBy, 'full_name', fallback.performedBy),
+      level: action.includes('DELETE') ? { label: 'WARN', tone: 'warning' } : { label: 'INFO', tone: 'neutral' },
+    };
+  }
+
+  private toCharts(
+    response: {
+      general: unknown;
+      incidents: unknown;
+      absences: unknown;
+      justifications: unknown;
+    },
+    fallback: ManagementCharts,
+  ): ManagementCharts {
+    const general = toRecord(this.unwrapData(response.general));
+    const incidents = toRecord(this.unwrapData(response.incidents));
+    const absences = toRecord(this.unwrapData(response.absences));
+    const justifications = toRecord(toRecord(this.unwrapData(response.justifications))?.['by_status']);
+
+    return {
+      totalStudents: readNumber(general, 'total_students', fallback.totalStudents),
+      attendanceRate: readNumber(general, 'attendance_rate', fallback.attendanceRate),
+      incidentsTotal: readNumber(incidents, 'total', fallback.incidentsTotal),
+      absencesTotal: this.sumGroupedTotals(absences, fallback.absencesTotal),
+      justifications: {
+        approved: readNumber(justifications, 'ACEPTADO', fallback.justifications.approved),
+        pending: readNumber(justifications, 'PENDIENTE', fallback.justifications.pending),
+        rejected: readNumber(justifications, 'RECHAZADO', fallback.justifications.rejected),
+      },
+    };
+  }
+
+  private sumGroupedTotals(record: UnknownRecord | null, fallback: number): number {
+    if (!record) {
+      return fallback;
+    }
+
+    const groups = record['by_group'];
+
+    if (!Array.isArray(groups)) {
+      return fallback;
+    }
+
+    return groups.reduce((sum, item) => sum + readNumber(toRecord(item), 'total', 0), 0);
+  }
+}
+
+function toRecord(value: unknown): UnknownRecord | null {
+  return typeof value === 'object' && value !== null ? (value as UnknownRecord) : null;
+}
+
+function readString(record: UnknownRecord | null | undefined, key: string, fallback: string): string {
+  const value = record?.[key];
+  return typeof value === 'string' && value.trim().length ? value : fallback;
+}
+
+function readNumber(record: UnknownRecord | null | undefined, key: string, fallback: number): number {
+  const value = record?.[key];
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  return fallback;
+}
+
+function readBoolean(record: UnknownRecord | null | undefined, key: string, fallback: boolean): boolean {
+  const value = record?.[key];
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function readId(record: UnknownRecord | null | undefined, fallback: string): string {
+  const value = record?.['id'];
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
+}
+
+function statusFromLabel(label: string) {
+  const normalized = label.toLowerCase();
+
+  if (
+    normalized.includes('rechaz') ||
+    normalized.includes('crit') ||
+    normalized.includes('urgent') ||
+    normalized.includes('falta') ||
+    normalized.includes('offline')
+  ) {
+    return { label, tone: 'danger' as const };
+  }
+
+  if (
+    normalized.includes('pend') ||
+    normalized.includes('activo') ||
+    normalized.includes('retardo') ||
+    normalized.includes('proceso')
+  ) {
+    return { label, tone: 'warning' as const };
+  }
+
+  if (
+    normalized.includes('acept') ||
+    normalized.includes('aprob') ||
+    normalized.includes('concl') ||
+    normalized.includes('online') ||
+    normalized.includes('asist')
+  ) {
+    return { label, tone: 'success' as const };
+  }
+
+  return { label, tone: 'neutral' as const };
+}
+
+function neutralStatus(label = 'Sin estado'): ManagementStatus {
+  return { label, tone: 'neutral' };
+}
+
+function emptyGroup(index: number): ManagementGroup {
+  return {
+    id: String(index + 1),
+    label: 'Grupo',
+    career: 'Sin carrera',
+    shift: 'Sin turno',
+    studentCount: 0,
+    attendanceRate: 0,
+    tutor: 'Sin tutor asignado',
+  };
+}
+
+function emptyStudent(index: number): ManagementStudent {
+  return {
+    id: String(index + 1),
+    controlNumber: '',
+    name: 'Alumno',
+    group: '',
+    career: '',
+    email: '',
+    phone: '',
+    tutorName: '',
+    status: neutralStatus(),
+    attendanceRate: 0,
+    level: '',
+    avatarUrl: '/profile-avatar.svg',
+    recentAttendance: [],
+  };
+}
+
+function emptyTeacher(index: number): ManagementTeacher {
+  return {
+    id: String(index + 1),
+    name: 'Profesor',
+    employeeNumber: '',
+    email: '',
+    phone: '',
+    career: '',
+    activeGroups: [],
+    subjects: [],
+    status: neutralStatus(),
+    schedulesCount: 0,
+    avatarUrl: '/profile-avatar.svg',
+  };
+}
+
+function emptySubject(index: number): ManagementSubject {
+  return {
+    id: String(index + 1),
+    name: 'Materia',
+    group: '',
+    semester: '',
+    teacher: '',
+    schedule: '',
+    classroom: '',
+  };
+}
+
+function emptySchedule(index: number): ManagementSchedule {
+  return {
+    id: String(index + 1),
+    day: '',
+    time: '',
+    subject: '',
+    teacher: '',
+    group: '',
+    classroom: '',
+  };
+}
+
+function emptyJustification(index: number): ManagementJustification {
+  return {
+    id: String(index + 1),
+    studentId: '',
+    studentName: '',
+    subject: '',
+    reason: '',
+    date: '',
+    submittedAt: '',
+    status: neutralStatus(),
+  };
+}
+
+function emptyDevice(index: number): ManagementDevice {
+  return {
+    id: String(index + 1),
+    name: 'Dispositivo',
+    macAddress: '',
+    ipAddress: '',
+    classroom: '',
+    building: '',
+    tutor: '',
+    status: neutralStatus(),
+    lastSync: '',
+  };
+}
+
+function emptyIncident(index: number): ManagementIncident {
+  return {
+    id: String(index + 1),
+    title: 'Incidente',
+    type: '',
+    severity: neutralStatus(),
+    status: neutralStatus(),
+    location: '',
+    reportedBy: '',
+    date: '',
+    description: '',
+    evidenceUrl: '',
+    roster: [],
+    history: [],
+  };
+}
+
+function emptyClaim(index: number): ManagementClaim {
+  return {
+    id: String(index + 1),
+    studentId: '',
+    studentName: '',
+    group: '',
+    subject: '',
+    status: neutralStatus(),
+    date: '',
+    description: '',
+    evidenceUrl: '',
+    history: [],
+  };
+}
+
+function emptyLog(index: number, entity: ManagementAuditLog['entity']): ManagementAuditLog {
+  return {
+    id: String(index + 1),
+    entity,
+    date: '',
+    description: '',
+    level: neutralStatus('INFO'),
+    performedBy: '',
+  };
+}

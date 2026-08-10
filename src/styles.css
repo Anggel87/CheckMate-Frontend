@@ -86,18 +86,19 @@ app-root {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  display: block;
   min-height: 100dvh;
   background: var(--checkmate-background);
 }
 
-.app-shell.is-sidebar-collapsed {
-  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
-}
-
 .app-main {
   min-width: 0;
+  margin-left: var(--sidebar-width);
+  transition: margin-left var(--checkmate-transition);
+}
+
+.app-shell.is-sidebar-collapsed .app-main {
+  margin-left: var(--sidebar-collapsed-width);
 }
 
 .app-content {
@@ -111,11 +112,12 @@ app-root {
 }
 
 .checkmate-sidebar {
-  position: sticky;
-  top: 0;
+  position: fixed;
+  inset: 0 auto 0 0;
   z-index: 50;
   display: flex;
   flex-direction: column;
+  width: var(--sidebar-width);
   height: 100dvh;
   padding: 20px 16px;
   overflow-y: auto;
@@ -123,6 +125,13 @@ app-root {
   border-right: 1px solid rgba(210, 210, 215, 0.72);
   box-shadow: var(--checkmate-shadow-sm);
   backdrop-filter: saturate(180%) blur(18px);
+  transition:
+    width var(--checkmate-transition),
+    transform var(--checkmate-transition);
+}
+
+.checkmate-sidebar.is-collapsed {
+  width: var(--sidebar-collapsed-width);
 }
 
 .checkmate-sidebar__brand,
@@ -1787,6 +1796,11 @@ app-root {
     grid-template-columns: 1fr;
   }
 
+  .app-main,
+  .app-shell.is-sidebar-collapsed .app-main {
+    margin-left: 0;
+  }
+
   .checkmate-sidebar {
     position: fixed;
     left: 0;
@@ -2431,6 +2445,11 @@ app-root {
   .app-shell,
   .app-shell.is-sidebar-collapsed {
     grid-template-columns: 1fr;
+  }
+
+  .app-main,
+  .app-shell.is-sidebar-collapsed .app-main {
+    margin-left: 0;
   }
 
   .checkmate-sidebar {
@@ -6220,4 +6239,1115 @@ app-root {
   .teacher-emergency-student b {
     grid-column: 2;
   }
+}
+
+/* Tutor role screens and shared layout corrections */
+html,
+body {
+  overflow-x: hidden;
+}
+
+.app-shell,
+.app-main,
+.checkmate-topbar {
+  min-width: 0;
+}
+
+.checkmate-topbar {
+  align-items: center;
+  width: 100%;
+}
+
+.checkmate-topbar__left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.checkmate-topbar__left strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.checkmate-topbar__actions {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.profile-menu__panel,
+.notification-menu__panel {
+  max-width: calc(100vw - 24px);
+}
+
+.checkmate-sidebar {
+  background: #000000;
+  color: #ffffff;
+}
+
+.checkmate-sidebar__brand a {
+  justify-items: center;
+  gap: 10px;
+}
+
+.checkmate-sidebar__logo {
+  width: clamp(54px, 48%, 88px);
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.checkmate-sidebar__role {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.checkmate-sidebar.is-collapsed .checkmate-sidebar__logo {
+  width: 44px;
+}
+
+.checkmate-sidebar-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tutor-dashboard-layout,
+.tutor-attendance-layout,
+.tutor-justification-detail-layout,
+.tutor-claim-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 28px;
+  align-items: start;
+}
+
+.tutor-groups-panel,
+.tutor-day-summary,
+.tutor-student-aside,
+.tutor-filter-card,
+.tutor-form-card,
+.tutor-justification-document,
+.tutor-claim-description-card,
+.tutor-claim-actions,
+.tutor-claim-meta {
+  display: grid;
+  gap: 18px;
+}
+
+.tutor-groups-panel__header,
+.tutor-list-heading,
+.tutor-day-summary > div,
+.tutor-claim-meta,
+.tutor-claim-actions,
+.tutor-row-actions,
+.tutor-form-section-header,
+.tutor-recurrent-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.tutor-groups-panel__header,
+.tutor-list-heading,
+.tutor-day-summary > div,
+.tutor-form-section-header {
+  justify-content: space-between;
+}
+
+.teacher-tabs a {
+  padding: 0 0 12px;
+  color: var(--checkmate-text-secondary);
+  font-size: 18px;
+  font-weight: 700;
+  background: transparent;
+  border-bottom: 3px solid transparent;
+}
+
+.teacher-tabs a.is-active {
+  color: #000000;
+  border-color: #c70d2c;
+}
+
+.tutor-list-heading span,
+.tutor-form-section-header span,
+.tutor-day-summary > span,
+.tutor-active-total span,
+.tutor-active-total small,
+.tutor-claim-meta span {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tutor-student-preview-list,
+.tutor-attendance-records,
+.tutor-claim-timeline,
+.tutor-observations-card {
+  display: grid;
+  gap: 12px;
+}
+
+.tutor-student-preview-row,
+.tutor-attendance-record,
+.tutor-attachment-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px 16px;
+  color: var(--checkmate-text-primary);
+  background: #ffffff;
+  border: 1px solid rgba(210, 210, 215, 0.85);
+  border-radius: 8px;
+}
+
+.tutor-student-preview-row small,
+.tutor-attendance-record span,
+.tutor-attachment-card small,
+.tutor-observation small,
+.tutor-observation p {
+  color: var(--checkmate-text-secondary);
+}
+
+.tutor-full-list-link {
+  width: 100%;
+}
+
+.tutor-progress,
+.teacher-progress {
+  height: 8px;
+  overflow: hidden;
+  background: var(--checkmate-secondary);
+  border-radius: 999px;
+}
+
+.tutor-progress span,
+.teacher-progress span {
+  display: block;
+  height: 100%;
+  background: #c70d2c;
+  border-radius: inherit;
+}
+
+.teacher-progress span.is-warning {
+  background: var(--checkmate-warning);
+}
+
+.teacher-progress span.is-danger {
+  background: var(--checkmate-danger);
+}
+
+.tutor-day-summary dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tutor-day-summary dl div {
+  padding: 14px;
+  background: var(--checkmate-background);
+  border-radius: 8px;
+}
+
+.tutor-day-summary dt {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+}
+
+.tutor-day-summary dd {
+  margin: 6px 0 0;
+  color: #c70d2c;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.tutor-campus-card figcaption {
+  display: grid;
+  gap: 4px;
+  text-transform: none;
+}
+
+.tutor-alert-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  border-left: 4px solid #c70d2c;
+}
+
+.tutor-alert-card > i {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #c70d2c;
+  background: var(--checkmate-danger-soft);
+  border-radius: 999px;
+}
+
+.tutor-alert-card h2 {
+  font-size: 16px;
+}
+
+.tutor-alert-card p {
+  color: var(--checkmate-text-secondary);
+}
+
+.tutor-alert-card a {
+  color: #c70d2c;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tutor-search-control {
+  position: relative;
+  display: block;
+  min-width: min(100%, 280px);
+}
+
+.tutor-search-control i {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  color: var(--checkmate-text-secondary);
+  transform: translateY(-50%);
+}
+
+.tutor-search-control .checkmate-input {
+  padding-left: 42px;
+}
+
+.tutor-row-actions,
+.tutor-profile-actions,
+.tutor-segmented-actions,
+.tutor-department-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tutor-profile-actions {
+  justify-content: flex-end;
+}
+
+.tutor-profile-avatar {
+  width: 92px;
+  height: 92px;
+  font-size: 24px;
+}
+
+.tutor-student-card-grid .teacher-group-card {
+  min-height: 240px;
+}
+
+.tutor-student-card header {
+  align-items: center;
+}
+
+.tutor-student-aside img,
+.tutor-student-aside .avatar {
+  width: 78px;
+  height: 78px;
+  border-radius: 999px;
+}
+
+.tutor-student-aside dl,
+.tutor-filter-card {
+  display: grid;
+  gap: 16px;
+}
+
+.tutor-student-aside dt {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.tutor-student-aside dd {
+  margin: 4px 0 0;
+  font-weight: 800;
+}
+
+.tutor-subject-tabs {
+  justify-content: stretch;
+  padding: 0;
+}
+
+.tutor-subject-tabs button {
+  flex: 1 1 160px;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid rgba(210, 210, 215, 0.85);
+  border-bottom-width: 3px;
+  border-radius: 8px 8px 0 0;
+}
+
+.tutor-attendance-record {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-left: 4px solid var(--checkmate-success);
+}
+
+.tutor-attendance-record.is-danger {
+  border-left-color: var(--checkmate-danger);
+}
+
+.tutor-attendance-record.is-warning {
+  border-left-color: var(--checkmate-warning);
+}
+
+.tutor-attendance-record b {
+  text-align: right;
+}
+
+.tutor-record-detail-layout {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.tutor-stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.tutor-compact-select {
+  width: auto;
+  min-width: 180px;
+}
+
+.tutor-justifications-table .teacher-table__row {
+  grid-template-columns: minmax(220px, 1.4fr) minmax(160px, 0.8fr) minmax(140px, 0.7fr) minmax(120px, 0.6fr) auto 54px;
+}
+
+.tutor-form-card {
+  max-width: 1040px;
+}
+
+.tutor-segmented-field {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+
+.tutor-attachment-section,
+.tutor-resolution-box {
+  display: grid;
+  gap: 16px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(210, 210, 215, 0.75);
+}
+
+.tutor-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.tutor-attachment-card {
+  width: 100%;
+  text-align: left;
+}
+
+.tutor-observation {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.tutor-department-tabs button {
+  min-height: 44px;
+  padding: 10px 18px;
+  color: var(--checkmate-text-primary);
+  background: #ffffff;
+  border: 1px solid rgba(210, 210, 215, 0.85);
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.tutor-department-tabs button.is-active {
+  color: #ffffff;
+  background: #000000;
+}
+
+.tutor-active-total {
+  min-width: 220px;
+  padding: 18px;
+}
+
+.tutor-claims-list .teacher-table__row {
+  grid-template-columns: minmax(260px, 1fr) 160px 120px 24px;
+}
+
+.tutor-claim-row {
+  color: inherit;
+}
+
+.tutor-claim-row b {
+  color: #c70d2c;
+}
+
+.tutor-floating-action {
+  position: fixed;
+  right: 36px;
+  bottom: 34px;
+  z-index: 20;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  color: #ffffff;
+  background: #c70d2c;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: var(--checkmate-shadow-md);
+}
+
+.tutor-claim-detail-layout {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.tutor-claim-description-card {
+  min-height: 340px;
+}
+
+.tutor-claim-description-card p {
+  padding: 28px;
+  line-height: 1.8;
+  background: #f7f2f2;
+  border: 1px solid rgba(210, 210, 215, 0.6);
+  border-radius: 8px;
+}
+
+.tutor-claim-evidence,
+.tutor-recurrent-card {
+  min-height: 160px;
+}
+
+.tutor-evidence-preview {
+  display: grid;
+  min-height: 170px;
+  place-items: center;
+  color: var(--checkmate-text-secondary);
+  border: 2px dashed rgba(110, 110, 115, 0.32);
+  border-radius: 8px;
+}
+
+.tutor-evidence-preview i {
+  font-size: 42px;
+}
+
+.tutor-claim-meta,
+.tutor-claim-actions,
+.tutor-claim-timeline {
+  grid-column: 1 / -1;
+}
+
+.tutor-claim-meta article {
+  flex: 1 1 240px;
+}
+
+.tutor-claim-actions {
+  justify-content: space-between;
+}
+
+.tutor-claim-timeline article {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.tutor-claim-timeline article > span {
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  background: #c70d2c;
+  border-radius: 999px;
+}
+
+.file-upload-field {
+  display: grid;
+  gap: 12px;
+}
+
+.file-upload small {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+}
+
+.file-upload.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.file-upload-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.file-upload-preview__item {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 40px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  background: var(--checkmate-background);
+  border: 1px solid rgba(210, 210, 215, 0.72);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.file-upload-preview__item img,
+.file-upload-preview__item > span {
+  width: 88px;
+  height: 64px;
+  object-fit: cover;
+  background: var(--checkmate-secondary);
+  border-radius: var(--checkmate-radius-sm);
+}
+
+.file-upload-preview__item > span {
+  display: grid;
+  place-items: center;
+  color: var(--checkmate-text-secondary);
+}
+
+.file-upload-preview__item strong,
+.file-upload-preview__item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-upload-preview__item small {
+  color: var(--checkmate-text-secondary);
+}
+
+.management-page {
+  display: grid;
+  gap: 22px;
+}
+
+.management-page__header {
+  margin-bottom: 0;
+}
+
+.management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.management-actions--spread {
+  justify-content: space-between;
+}
+
+.management-loading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--checkmate-text-secondary);
+}
+
+.management-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.management-card,
+.management-summary,
+.management-info-panel,
+.management-profile-card,
+.management-profile-wide,
+.management-table-card,
+.management-form {
+  display: grid;
+  gap: 16px;
+}
+
+.management-card h2,
+.management-summary h2,
+.management-info-panel h2,
+.management-profile-card h2,
+.management-profile-wide h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.management-card p,
+.management-summary p,
+.management-info-panel p,
+.management-profile-card p,
+.management-profile-wide p {
+  margin: 0;
+  color: var(--checkmate-text-secondary);
+}
+
+.management-card__header,
+.management-student-banner,
+.management-profile-wide {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.management-icon {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--checkmate-info);
+  background: var(--checkmate-info-soft);
+  border-radius: 999px;
+}
+
+.management-icon--danger {
+  color: var(--checkmate-danger);
+  background: var(--checkmate-danger-soft);
+}
+
+.management-metrics,
+.management-data-grid {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.management-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.management-data-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.management-metrics div,
+.management-data-grid div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.management-metrics dt,
+.management-data-grid dt {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.management-metrics dd,
+.management-data-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.management-metrics dd {
+  font-size: 24px;
+}
+
+.management-split,
+.management-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 24px;
+  align-items: start;
+}
+
+.management-detail-grid {
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+}
+
+.management-info-panel--wide {
+  grid-column: 1 / -1;
+}
+
+.management-profile-card {
+  justify-items: center;
+  text-align: center;
+}
+
+.management-profile-card img,
+.management-profile-wide img {
+  width: 112px;
+  height: 112px;
+  object-fit: cover;
+  background: var(--checkmate-secondary);
+  border-radius: 999px;
+}
+
+.management-profile-wide {
+  grid-column: 1 / -1;
+  justify-content: start;
+}
+
+.management-profile-wide > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.management-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.management-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.management-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.management-table th,
+.management-table td {
+  padding: 14px 12px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(210, 210, 215, 0.72);
+}
+
+.management-table th {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  background: var(--checkmate-background);
+}
+
+.management-table td small,
+.management-record p {
+  display: block;
+  margin-top: 4px;
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+}
+
+.management-table tr.is-present td {
+  background: var(--checkmate-success-soft);
+}
+
+.management-table tr.is-absent td {
+  background: var(--checkmate-danger-soft);
+}
+
+.management-list {
+  display: grid;
+  gap: 12px;
+}
+
+.management-record,
+.management-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  background: var(--checkmate-background);
+  border: 1px solid rgba(210, 210, 215, 0.55);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.management-record > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.management-record h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.management-form {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 24px;
+}
+
+.management-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.management-form__full,
+.management-form__footer {
+  grid-column: 1 / -1;
+}
+
+.management-form__aside {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px;
+  background: var(--checkmate-background);
+  border: 1px solid rgba(210, 210, 215, 0.72);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.management-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(210, 210, 215, 0.72);
+}
+
+.management-type-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.management-type-card {
+  display: grid;
+  gap: 8px;
+  min-height: 142px;
+  place-items: center;
+  padding: 18px;
+  color: var(--checkmate-text-primary);
+  background: var(--checkmate-surface);
+  border: 1px solid rgba(210, 210, 215, 0.9);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.management-type-card i {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  color: var(--checkmate-danger);
+  background: var(--checkmate-danger-soft);
+  border-radius: 999px;
+}
+
+.management-type-card.is-active {
+  border-color: var(--checkmate-black);
+  box-shadow: inset 0 3px 0 var(--checkmate-black);
+}
+
+.management-type-card small {
+  color: var(--checkmate-text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.management-student-banner strong {
+  font-size: 34px;
+}
+
+.management-timeline {
+  display: grid;
+  gap: 14px;
+}
+
+.management-timeline article {
+  display: grid;
+  gap: 4px;
+  padding-left: 14px;
+  border-left: 3px solid var(--checkmate-danger);
+}
+
+.management-timeline small {
+  color: var(--checkmate-text-secondary);
+}
+
+.management-evidence {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  padding: 18px;
+  color: var(--checkmate-text-secondary);
+  border: 1px dashed rgba(110, 110, 115, 0.42);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.management-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.management-chart {
+  min-height: 260px;
+  place-items: center;
+  text-align: center;
+}
+
+.management-donut {
+  display: grid;
+  width: 150px;
+  height: 150px;
+  place-items: center;
+  background: conic-gradient(var(--checkmate-black) calc(var(--value) * 1%), var(--checkmate-secondary) 0);
+  border-radius: 999px;
+}
+
+.management-donut span {
+  display: grid;
+  width: 86px;
+  height: 86px;
+  place-items: center;
+  background: var(--checkmate-surface);
+  border-radius: 999px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+@media (max-width: 1180px) {
+  .management-card-grid,
+  .management-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-split,
+  .management-detail-grid,
+  .management-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tutor-dashboard-layout,
+  .tutor-attendance-layout,
+  .tutor-justification-detail-layout,
+  .tutor-claim-detail-layout,
+  .tutor-record-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .tutor-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 991.98px) {
+  .checkmate-sidebar {
+    max-width: calc(100vw - 44px);
+  }
+
+  .checkmate-topbar {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 720px) {
+  .management-card-grid,
+  .management-type-grid,
+  .management-chart-grid,
+  .management-toolbar,
+  .management-form__grid,
+  .management-data-grid,
+  .management-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .management-actions,
+  .management-form__footer,
+  .management-card__header,
+  .management-student-banner,
+  .management-profile-wide {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .management-actions .btn-checkmate,
+  .management-form__footer .btn-checkmate,
+  .management-form__footer a,
+  .management-record .btn-checkmate {
+    width: 100%;
+  }
+
+  .management-record,
+  .management-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .file-upload-preview__item {
+    grid-template-columns: 64px minmax(0, 1fr) 36px;
+  }
+
+  .file-upload-preview__item img,
+  .file-upload-preview__item > span {
+    width: 64px;
+    height: 54px;
+  }
+
+  .tutor-list-heading,
+  .tutor-day-summary > div,
+  .tutor-claim-actions,
+  .teacher-page__header--filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tutor-stats-grid,
+  .tutor-attachment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tutor-row-actions .btn-checkmate,
+  .tutor-profile-actions .btn-checkmate,
+  .tutor-claim-actions .btn-checkmate,
+  .tutor-claim-actions a,
+  .tutor-search-control,
+  .tutor-compact-select {
+    width: 100%;
+  }
+
+  .tutor-justifications-table,
+  .tutor-claims-list,
+  .tutor-students-table {
+    min-width: 820px;
+  }
+
+  .teacher-table-card {
+    overflow-x: auto;
+  }
+
+  .tutor-floating-action {
+    right: 18px;
+    bottom: 18px;
+  }
+}
+
+@media (max-width: 640px) {
+  .checkmate-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .checkmate-topbar__actions {
+    gap: 6px;
+  }
+
+  .checkmate-topbar .icon-button,
+  .profile-menu__button {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .profile-menu__avatar,
+  .profile-menu__avatar img {
+    width: 30px;
+    height: 30px;
+  }
+
+  .checkmate-topbar__left strong {
+    max-width: calc(100vw - 170px);
+    font-size: 16px;
+  }
+
 }

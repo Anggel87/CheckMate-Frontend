@@ -1,11 +1,27 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import {
-  STUDENT_SUBJECT_HISTORY,
-  STUDENT_SUBJECTS,
-  StudentCourseMock,
-} from '../../../../core/mocks/student.mock';
+  StudentAttendanceRecordView,
+  StudentCourseView,
+  StudentPortalApiService,
+} from '../../../student-portal/data-access/student-portal-api.service';
+
+const EMPTY_SUBJECT: StudentCourseView = {
+  id: '',
+  name: 'Materia',
+  teacher: '',
+  group: '',
+  schedule: '',
+  location: '',
+  attendance: 0,
+  icon: 'fa-regular fa-bookmark',
+  tone: 'neutral',
+  presentCount: 0,
+  lateCount: 0,
+  absentCount: 0,
+};
 
 @Component({
   selector: 'app-student-subject-detail',
@@ -35,7 +51,7 @@ import {
               </span>
               Docente
             </dt>
-            <dd>{{ subject.teacher }}</dd>
+            <dd>{{ subject.teacher || 'Sin docente registrado' }}</dd>
           </div>
           <div>
             <dt>
@@ -44,7 +60,7 @@ import {
               </span>
               Horario
             </dt>
-            <dd>{{ subject.schedule }}</dd>
+            <dd>{{ subject.schedule || 'Sin horario activo' }}</dd>
           </div>
           <div>
             <dt>
@@ -53,7 +69,7 @@ import {
               </span>
               Salon
             </dt>
-            <dd>{{ subject.location }}</dd>
+            <dd>{{ subject.location || 'Sin aula asignada' }}</dd>
           </div>
         </dl>
       </article>
@@ -87,37 +103,49 @@ import {
           </button>
         </header>
 
-        <div class="student-table-wrapper">
-          <table class="student-table">
-            <thead>
-              <tr>
-                <th scope="col">Fecha</th>
-                <th scope="col">Horario</th>
-                <th scope="col">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (record of history; track record.id) {
+        @if (history.length === 0) {
+          <p class="dropdown-empty">Sin asistencias registradas para esta materia.</p>
+        } @else {
+          <div class="student-table-wrapper">
+            <table class="student-table">
+              <thead>
                 <tr>
-                  <td>{{ record.date }}</td>
-                  <td>{{ record.time }}</td>
-                  <td><app-status-badge [label]="record.status" [tone]="record.statusTone" /></td>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Horario</th>
+                  <th scope="col">Estado</th>
                 </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-
-        <button type="button" class="student-load-more">Cargar mas registros</button>
+              </thead>
+              <tbody>
+                @for (record of history; track record.id) {
+                  <tr>
+                    <td>{{ record.date }}</td>
+                    <td>{{ record.time }}</td>
+                    <td><app-status-badge [label]="record.status" [tone]="record.statusTone" /></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
       </article>
     </section>
   `,
 })
 export class StudentSubjectDetailComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
-  private readonly subjectId = this.route.snapshot.paramMap.get('subjectId');
+  private readonly studentApi = inject(StudentPortalApiService);
 
-  protected readonly subject: StudentCourseMock =
-    STUDENT_SUBJECTS.find((subject) => subject.id === this.subjectId) ?? STUDENT_SUBJECTS[0]!;
-  protected readonly history = STUDENT_SUBJECT_HISTORY;
+  protected subject: StudentCourseView = EMPTY_SUBJECT;
+  protected history: StudentAttendanceRecordView[] = [];
+
+  constructor() {
+    this.studentApi
+      .getSubjectDetail(this.route.snapshot.paramMap.get('subjectId') ?? '')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(({ subject, history }) => {
+        this.subject = subject;
+        this.history = history;
+      });
+  }
 }

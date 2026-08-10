@@ -1,7 +1,7 @@
 import { computed, Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { catchError, finalize, map, Observable, of, switchMap } from 'rxjs';
+import { catchError, finalize, map, Observable, of, switchMap, timeout } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiResponse } from '../models/api-response.model';
 import { AuthenticatedUser } from '../models/authenticated-user.model';
@@ -16,7 +16,6 @@ import { mapGovernanceRole } from './governance-role.mapper';
 import { SessionService } from './session.service';
 import {
   buildGovernanceLoginUrl,
-  buildGovernanceLogoutUrl,
   checkmatePortalUrl,
 } from './auth-redirect-url.util';
 
@@ -65,12 +64,12 @@ export class AuthService {
   signOut(): void {
     const token = this.sessionService.authToken();
     const tokenType = this.sessionService.tokenType() ?? 'Bearer';
-    const logoutUrl = buildGovernanceLogoutUrl();
+    const redirectToLanding = () => void this.router.navigateByUrl('/', { replaceUrl: true });
 
     this.sessionService.clear();
 
     if (!token) {
-      window.location.assign(logoutUrl);
+      redirectToLanding();
       return;
     }
 
@@ -81,8 +80,9 @@ export class AuthService {
         { headers: { Authorization: `${tokenType} ${token}` } },
       )
       .pipe(
+        timeout(3000),
         catchError(() => of(null)),
-        finalize(() => window.location.assign(logoutUrl)),
+        finalize(redirectToLanding),
       )
       .subscribe();
   }

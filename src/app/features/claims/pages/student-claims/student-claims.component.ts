@@ -1,7 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
-import { STUDENT_CLAIMS } from '../../../../core/mocks/student.mock';
+import {
+  StudentClaimView,
+  StudentPortalApiService,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-student-claims',
@@ -24,7 +28,7 @@ import { STUDENT_CLAIMS } from '../../../../core/mocks/student.mock';
       <section class="student-claims-summary">
         <article class="student-card student-total-card">
           <span>Total Reclamos</span>
-          <strong>12 <small>este semestre</small></strong>
+          <strong>{{ claims.length }} <small>registrados</small></strong>
           <i class="fa-regular fa-clipboard" aria-hidden="true"></i>
         </article>
 
@@ -32,14 +36,14 @@ import { STUDENT_CLAIMS } from '../../../../core/mocks/student.mock';
           <span>Estado Actual</span>
           <div>
             <strong
-              ><i class="student-dot student-dot--late"></i>4 <small>Pendientes</small></strong
+              ><i class="student-dot student-dot--late"></i>{{ pendingCount() }} <small>Pendientes</small></strong
             >
             <strong
-              ><i class="student-dot student-dot--justified"></i>3
+              ><i class="student-dot student-dot--justified"></i>{{ reviewCount() }}
               <small>En revision</small></strong
             >
             <strong
-              ><i class="student-dot student-dot--present"></i>5 <small>Aprobados</small></strong
+              ><i class="student-dot student-dot--present"></i>{{ approvedCount() }} <small>Aprobados</small></strong
             >
           </div>
         </article>
@@ -95,7 +99,7 @@ import { STUDENT_CLAIMS } from '../../../../core/mocks/student.mock';
         </div>
 
         <footer class="student-table-footer">
-          <span>Mostrando 1 a 4 de 12 reclamos</span>
+          <span>Mostrando {{ claims.length }} reclamos</span>
           <div class="student-pagination" aria-label="Paginacion de reclamos">
             <button type="button" disabled aria-label="Pagina anterior">
               <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -110,5 +114,29 @@ import { STUDENT_CLAIMS } from '../../../../core/mocks/student.mock';
   `,
 })
 export class StudentClaimsComponent {
-  protected readonly claims = STUDENT_CLAIMS;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly studentApi = inject(StudentPortalApiService);
+
+  protected claims: StudentClaimView[] = [];
+
+  constructor() {
+    this.studentApi
+      .getClaims()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((claims) => {
+        this.claims = claims;
+      });
+  }
+
+  protected pendingCount(): number {
+    return this.claims.filter((claim) => claim.statusTone === 'pending').length;
+  }
+
+  protected reviewCount(): number {
+    return this.claims.filter((claim) => claim.statusTone === 'info').length;
+  }
+
+  protected approvedCount(): number {
+    return this.claims.filter((claim) => claim.statusTone === 'success').length;
+  }
 }

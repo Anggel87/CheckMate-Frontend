@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { guestGuard } from './core/guards/guest.guard';
+import { roleRedirectGuard } from './core/guards/role-redirect.guard';
 import { LANDING_ROUTES } from './features/landing/landing.routes';
 import { ADMIN_ROUTES } from './roles/admin/admin.routes';
 import { CAREER_DIRECTOR_ROUTES } from './roles/career-director/career-director.routes';
@@ -78,6 +79,10 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'not-found',
+    canActivate: [roleRedirectGuard],
+    loadComponent: () =>
+      import('./shared/components/error-pages/error-pages.component').then(
+        (component) => component.NotFoundPageComponent,
+      ),
   },
 ];

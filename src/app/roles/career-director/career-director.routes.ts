@@ -77,6 +77,15 @@ export const CAREER_DIRECTOR_ROUTES: Routes = [
           ),
       },
       {
+        path: 'nfc-devices',
+        canActivate: [permissionGuard],
+        data: { permission: 'nfc-devices.view' },
+        loadChildren: () =>
+          import('../../features/nfc-devices/nfc-devices.routes').then(
+            (routes) => routes.NFC_DEVICES_ROUTES,
+          ),
+      },
+      {
         path: 'claims',
         canActivate: [permissionGuard],
         data: { permission: 'claims.view' },
@@ -90,6 +99,15 @@ export const CAREER_DIRECTOR_ROUTES: Routes = [
         loadChildren: () =>
           import('../../features/justifications/justifications.routes').then(
             (routes) => routes.JUSTIFICATIONS_ROUTES,
+          ),
+      },
+      {
+        path: 'incidents',
+        canActivate: [permissionGuard],
+        data: { permission: 'incidents.view' },
+        loadChildren: () =>
+          import('../../features/incidents/incidents.routes').then(
+            (routes) => routes.INCIDENTS_ROUTES,
           ),
       },
       {
@@ -118,14 +136,13 @@ export const CAREER_DIRECTOR_ROUTES: Routes = [
           ),
       },
       {
-        path: 'emergencies',
+        path: 'audit',
         canActivate: [permissionGuard],
-        data: { permission: 'emergencies.view' },
+        data: { permission: 'audit.view' },
         loadChildren: () =>
-          import('../../features/emergencies/emergencies.routes').then(
-            (routes) => routes.EMERGENCIES_ROUTES,
-          ),
+          import('../../features/audit/audit.routes').then((routes) => routes.AUDIT_ROUTES),
       },
+      { path: 'emergencies', pathMatch: 'full', redirectTo: 'incidents/new' },
       {
         path: 'profile',
         canActivate: [permissionGuard],

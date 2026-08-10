@@ -1,11 +1,14 @@
-import { Component } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import {
-  STUDENT_ATTENDANCE_SUMMARY,
-  STUDENT_CALENDAR_WEEKS,
-  STUDENT_RECENT_ATTENDANCE,
-} from '../../../../core/mocks/student.mock';
+  StudentAttendanceOverviewView,
+  StudentCalendarDayView,
+  StudentMetricView,
+  StudentPortalApiService,
+  StudentAttendanceRecordView,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-student-attendance-overview',
@@ -16,7 +19,7 @@ import {
       <header class="student-page__header student-page__header--action">
         <div>
           <h1>Mis Asistencias</h1>
-          <p>Ciclo Escolar 2023-2024 • Semestre 1</p>
+          <p>Registros obtenidos desde la API de CheckMate.</p>
         </div>
 
         <button type="button" class="btn-checkmate btn-checkmate-primary">
@@ -54,7 +57,7 @@ import {
               <button type="button" class="student-icon-button" aria-label="Mes anterior">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
               </button>
-              <strong>Octubre 2023</strong>
+              <strong>{{ monthLabel }}</strong>
               <button type="button" class="student-icon-button" aria-label="Mes siguiente">
                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
               </button>
@@ -71,7 +74,7 @@ import {
           <div
             class="student-calendar-grid"
             role="grid"
-            aria-label="Calendario de asistencia Octubre 2023"
+            [attr.aria-label]="'Calendario de asistencia ' + monthLabel"
           >
             @for (dayName of dayNames; track dayName) {
               <strong role="columnheader">{{ dayName }}</strong>
@@ -130,6 +133,8 @@ import {
                 </span>
                 <app-status-badge [label]="record.status" [tone]="record.statusTone" />
               </a>
+            } @empty {
+              <p class="dropdown-empty">Sin registros recientes desde la API.</p>
             }
           </div>
         </article>
@@ -138,8 +143,24 @@ import {
   `,
 })
 export class StudentAttendanceOverviewComponent {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly studentApi = inject(StudentPortalApiService);
+
   protected readonly dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
-  protected readonly metrics = STUDENT_ATTENDANCE_SUMMARY;
-  protected readonly calendarWeeks = STUDENT_CALENDAR_WEEKS;
-  protected readonly recentRecords = STUDENT_RECENT_ATTENDANCE;
+  protected metrics: StudentMetricView[] = [];
+  protected calendarWeeks: StudentCalendarDayView[][] = [];
+  protected recentRecords: StudentAttendanceRecordView[] = [];
+  protected monthLabel = '';
+
+  constructor() {
+    this.studentApi
+      .getAttendanceOverview()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((overview: StudentAttendanceOverviewView) => {
+        this.metrics = overview.metrics;
+        this.calendarWeeks = overview.calendarWeeks;
+        this.recentRecords = overview.recentRecords;
+        this.monthLabel = overview.monthLabel;
+      });
+  }
 }

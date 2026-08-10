@@ -1,11 +1,14 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
+import { StudentPortalApiService } from '../../../student-portal/data-access/student-portal-api.service';
 
-type StudentJustificationControl = 'type' | 'dateRange' | 'reason';
+type StudentJustificationControl = 'type' | 'reason';
 
 @Component({
   selector: 'app-new-justification',
@@ -36,37 +39,14 @@ type StudentJustificationControl = 'type' | 'dateRange' | 'reason';
                 [attr.aria-describedby]="'justification-type-error'"
               >
                 <option value="">Selecciona un tipo</option>
-                <option value="medical">Medico</option>
-                <option value="personal">Personal</option>
-                <option value="academic">Academico</option>
+                <option value="Medico">Medico</option>
+                <option value="Personal">Personal</option>
+                <option value="Academico">Academico</option>
               </select>
             </div>
             <app-form-validation-message
               id="justification-type-error"
               [message]="errorFor('type', 'Tipo de justificante')"
-            />
-          </label>
-
-          <label class="student-form-field" for="justification-dates">
-            <span class="checkmate-label">Rango de fechas <span>*</span></span>
-            <div class="student-input-with-icon">
-              <i class="fa-regular fa-calendar-days" aria-hidden="true"></i>
-              <input
-                id="justification-dates"
-                class="checkmate-input"
-                type="text"
-                placeholder="Seleccionar fechas"
-                formControlName="dateRange"
-                [class.is-invalid]="errorFor('dateRange', 'Rango de fechas')"
-                [attr.aria-describedby]="'justification-dates-error justification-dates-help'"
-              />
-            </div>
-            <small id="justification-dates-help"
-              >Aplica para los dias que no pudiste asistir.</small
-            >
-            <app-form-validation-message
-              id="justification-dates-error"
-              [message]="errorFor('dateRange', 'Rango de fechas')"
             />
           </label>
         </div>
@@ -89,15 +69,14 @@ type StudentJustificationControl = 'type' | 'dateRange' | 'reason';
 
         <section class="student-evidence-section">
           <h2>Adjuntar Evidencia</h2>
-          <p>Sube una receta medica, comprobante o documento que avale tu solicitud.</p>
+          <p>La API exige evidencia para crear un justificante.</p>
 
           <label class="student-file-drop" for="justification-file">
-            <input id="justification-file" type="file" accept=".pdf,.jpg,.jpeg,.png" />
+            <input id="justification-file" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="selectFile($event)" />
             <span class="student-icon-bubble student-icon-bubble--neutral" aria-hidden="true">
               <i class="fa-regular fa-file-arrow-up"></i>
             </span>
-            <strong>Haz clic para subir un archivo</strong>
-            <small>o arrastra y suelta aqui</small>
+            <strong>{{ evidenceName() || 'Haz clic para subir un archivo' }}</strong>
             <small>PDF, JPG o PNG (Max. 5MB)</small>
           </label>
         </section>
@@ -124,19 +103,29 @@ type StudentJustificationControl = 'type' | 'dateRange' | 'reason';
   `,
 })
 export class NewJustificationComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
+  private readonly studentApi = inject(StudentPortalApiService);
 
   protected readonly saving = signal(false);
+  protected readonly evidenceName = signal('');
+  private evidence: File | null = null;
   protected readonly form = this.formBuilder.nonNullable.group({
     type: ['', Validators.required],
-    dateRange: ['', Validators.required],
-    reason: ['', [Validators.required, Validators.maxLength(500)]],
+    reason: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(300)]],
   });
 
   protected errorFor(controlName: StudentJustificationControl, label: string): string {
     return controlErrorMessage(this.form.controls[controlName], label);
+  }
+
+  protected selectFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.evidence = input.files?.[0] ?? null;
+    this.evidenceName.set(this.evidence?.name ?? '');
   }
 
   protected submit(): void {
@@ -146,14 +135,46 @@ export class NewJustificationComponent {
       return;
     }
 
-    this.saving.set(true);
-    window.setTimeout(() => {
-      this.saving.set(false);
-      this.toastService.success(
-        'Justificante enviado',
-        'Tu solicitud quedo registrada para revision.',
+    const subjectId = this.route.snapshot.queryParamMap.get('subjectId');
+    const attendanceId = this.route.snapshot.queryParamMap.get('attendanceId');
+
+    if (!subjectId || !attendanceId) {
+      this.toastService.error(
+        'Selecciona una falta',
+        'Debes elegir una falta justificable antes de enviar el formulario.',
       );
-      void this.router.navigateByUrl('/student/justifications');
-    }, 500);
+      return;
+    }
+
+    if (!this.evidence) {
+      this.toastService.warning('Evidencia requerida', 'Adjunta un PDF, JPG o PNG para continuar.');
+      return;
+    }
+
+    const value = this.form.getRawValue();
+    const reason = `${value.type}. ${value.reason}`;
+
+    this.saving.set(true);
+    this.studentApi
+      .createJustification(subjectId, attendanceId, reason, this.evidence)
+      .pipe(
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.toastService.success(
+            'Justificante enviado',
+            'Tu solicitud quedo registrada para revision.',
+          );
+          void this.router.navigateByUrl('/student/justifications');
+        },
+        error: () => {
+          this.toastService.error(
+            'No se pudo enviar el justificante',
+            'La API rechazo la solicitud. Revisa la falta y el archivo.',
+          );
+        },
+      });
   }
 }

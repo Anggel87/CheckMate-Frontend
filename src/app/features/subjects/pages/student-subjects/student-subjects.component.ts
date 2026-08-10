@@ -1,6 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { STUDENT_SUBJECTS } from '../../../../core/mocks/student.mock';
+import {
+  StudentCourseView,
+  StudentPortalApiService,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-student-subjects',
@@ -48,11 +52,27 @@ import { STUDENT_SUBJECTS } from '../../../../core/mocks/student.mock';
               >Ver Detalles</a
             >
           </article>
+        } @empty {
+          <article class="student-card">
+            <p class="dropdown-empty">No hay materias activas registradas en la API.</p>
+          </article>
         }
       </section>
     </section>
   `,
 })
 export class StudentSubjectsComponent {
-  protected readonly subjects = STUDENT_SUBJECTS;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly studentApi = inject(StudentPortalApiService);
+
+  protected subjects: StudentCourseView[] = [];
+
+  constructor() {
+    this.studentApi
+      .getSubjects()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((subjects) => {
+        this.subjects = subjects;
+      });
+  }
 }

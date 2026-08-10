@@ -1,7 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../authentication/auth.service';
-import { ROUTE_PATHS } from '../constants/route-paths.constants';
 import { UserRole } from '../enums/user-role.enum';
 
 export const roleGuard: CanActivateFn = (route) => {
@@ -19,5 +18,5 @@ export const roleGuard: CanActivateFn = (route) => {
     return true;
   }
 
-  return router.createUrlTree([ROUTE_PATHS.forbidden]);
+  return router.createUrlTree([authService.getHomeUrl()]);
 };

@@ -38,7 +38,7 @@ export const TEACHER_ROUTES: Routes = [
         canActivate: [permissionGuard],
         data: { permission: 'students.view' },
         children: [
-          { path: '', pathMatch: 'full', redirectTo: '/teacher/groups/1-a/students' },
+          { path: '', pathMatch: 'full', redirectTo: '/teacher/groups' },
           {
             path: ':studentId',
             data: { topbarTitle: 'Perfil del alumno' },
@@ -93,7 +93,7 @@ export const TEACHER_ROUTES: Routes = [
         canActivate: [permissionGuard],
         data: { permission: 'attendance.view' },
         children: [
-          { path: '', pathMatch: 'full', redirectTo: 'take/base-datos' },
+          { path: '', pathMatch: 'full', redirectTo: '/teacher/schedule' },
           {
             path: 'take/:classId',
             data: { topbarTitle: 'Tus materias' },

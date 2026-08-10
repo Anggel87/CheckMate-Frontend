@@ -1,10 +1,11 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import {
-  STUDENT_ABSENCE_GROUPS,
-  StudentAbsenceGroupMock,
-} from '../../../../core/mocks/student.mock';
+  StudentAbsenceGroupView,
+  StudentPortalApiService,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-select-absence',
@@ -90,22 +91,33 @@ import {
   `,
 })
 export class SelectAbsenceComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
+  private readonly studentApi = inject(StudentPortalApiService);
 
-  protected readonly absenceGroups = STUDENT_ABSENCE_GROUPS;
+  protected absenceGroups: StudentAbsenceGroupView[] = [];
   protected readonly selectedAbsenceIds = signal<readonly string[]>([]);
   protected readonly selectedCount = computed(() => this.selectedAbsenceIds().length);
+
+  constructor() {
+    this.studentApi
+      .getJustifiableAbsences()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((groups) => {
+        this.absenceGroups = groups;
+      });
+  }
 
   protected isSelected(absenceId: string): boolean {
     return this.selectedAbsenceIds().includes(absenceId);
   }
 
-  protected isDaySelected(group: StudentAbsenceGroupMock): boolean {
+  protected isDaySelected(group: StudentAbsenceGroupView): boolean {
     return group.absences.every((absence) => this.isSelected(absence.id));
   }
 
-  protected isDayPartial(group: StudentAbsenceGroupMock): boolean {
+  protected isDayPartial(group: StudentAbsenceGroupView): boolean {
     const selected = group.absences.filter((absence) => this.isSelected(absence.id)).length;
     return selected > 0 && selected < group.absences.length;
   }
@@ -118,7 +130,7 @@ export class SelectAbsenceComponent {
     );
   }
 
-  protected toggleDay(group: StudentAbsenceGroupMock, event: Event): void {
+  protected toggleDay(group: StudentAbsenceGroupView, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     const dayIds = group.absences.map((absence) => absence.id);
 
@@ -137,6 +149,22 @@ export class SelectAbsenceComponent {
       return;
     }
 
-    void this.router.navigateByUrl('/student/justifications/new');
+    if (this.selectedCount() > 1) {
+      this.toastService.info(
+        'Justificacion individual',
+        'La API actual registra una falta por justificante. Se usara la primera seleccionada.',
+      );
+    }
+
+    const selected = this.absenceGroups
+      .flatMap((group) => group.absences)
+      .find((absence) => this.isSelected(absence.id));
+
+    void this.router.navigate(['/student/justifications/new'], {
+      queryParams: {
+        subjectId: selected?.subjectId,
+        attendanceId: selected?.attendanceId,
+      },
+    });
   }
 }

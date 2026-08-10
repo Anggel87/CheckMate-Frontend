@@ -1,7 +1,12 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
-import { STUDENT_ATTENDANCE_DETAIL } from '../../../../core/mocks/student.mock';
+import {
+  EMPTY_STUDENT_ATTENDANCE_DETAIL,
+  StudentAttendanceDetailView,
+  StudentPortalApiService,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-student-attendance-detail',
@@ -24,10 +29,10 @@ import { STUDENT_ATTENDANCE_DETAIL } from '../../../../core/mocks/student.mock';
         <article class="student-card student-attendance-detail-card">
           <header>
             <div>
-              <h2>{{ detail.subject }}</h2>
+              <h2>{{ detail.subject || 'Registro de asistencia' }}</h2>
               <p>{{ detail.teacher }}</p>
             </div>
-            <app-status-badge [label]="detail.status" tone="absent" />
+            <app-status-badge [label]="detail.status || 'Sin estado'" [tone]="detail.statusTone" />
           </header>
 
           <dl class="student-detail-list">
@@ -82,5 +87,18 @@ import { STUDENT_ATTENDANCE_DETAIL } from '../../../../core/mocks/student.mock';
   `,
 })
 export class StudentAttendanceDetailComponent {
-  protected readonly detail = STUDENT_ATTENDANCE_DETAIL;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly studentApi = inject(StudentPortalApiService);
+
+  protected detail: StudentAttendanceDetailView = EMPTY_STUDENT_ATTENDANCE_DETAIL;
+
+  constructor() {
+    this.studentApi
+      .getAttendanceDetail(this.route.snapshot.paramMap.get('attendanceId'))
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((detail) => {
+        this.detail = detail;
+      });
+  }
 }

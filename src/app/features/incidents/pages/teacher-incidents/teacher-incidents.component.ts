@@ -1,6 +1,11 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Router, RouterLink } from '@angular/router';
+import { ToastService } from '../../../../shared/feedback/services/toast.service';
+import {
+  TeacherIncidentView,
+  TeacherPortalApiService,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
   selector: 'app-teacher-incidents',
@@ -27,12 +32,12 @@ import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
         >
           <header class="teacher-incident-list-card__toolbar">
             <div class="teacher-filter-actions">
-              <button type="button" class="teacher-filter-button">
+              <button type="button" class="teacher-filter-button" (click)="showFilterInfo('fecha')">
                 <i class="fa-regular fa-calendar" aria-hidden="true"></i>
                 Filtro fecha
                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
               </button>
-              <button type="button" class="teacher-filter-button">
+              <button type="button" class="teacher-filter-button" (click)="showFilterInfo('tipo')">
                 <i class="fa-solid fa-shapes" aria-hidden="true"></i>
                 Filtro Tipo
                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
@@ -63,16 +68,18 @@ import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
                 </div>
                 <a
                   class="icon-button"
-                  [routerLink]="['/teacher/incidents', incident.id]"
+                  [routerLink]="[incidentBaseRoute(), incident.id]"
                   [attr.aria-label]="'Ver incidente ' + incident.id"
                 >
                   <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                 </a>
               </article>
+            } @empty {
+              <p class="dropdown-empty">No hay incidentes reportados desde la API.</p>
             }
           </div>
 
-          <a class="teacher-new-incident-button" routerLink="/teacher/incidents/new">
+          <a class="teacher-new-incident-button" [routerLink]="incidentBaseRoute() + '/new'">
             <i class="fa-solid fa-plus" aria-hidden="true"></i>
             Nuevo incidente
           </a>
@@ -85,7 +92,7 @@ import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
               <span class="teacher-live-badge"><i class="fa-solid fa-circle"></i> Live View</span>
             </div>
             <span>Ubicacion del ultimo incidente</span>
-            <strong>Campus Central - Bloque A</strong>
+            <strong>{{ lastIncidentLocation() || 'Sin incidentes activos' }}</strong>
           </article>
 
           <article class="teacher-card teacher-week-summary">
@@ -93,19 +100,19 @@ import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
             <div class="teacher-week-summary__row">
               <span class="is-critical"></span>
               <div><strong>Criticos</strong><small>Requieren accion inmediata</small></div>
-              <b>04</b>
+              <b>{{ criticalCount() }}</b>
             </div>
             <div class="teacher-week-summary__row">
               <span class="is-active"></span>
               <div><strong>En Curso</strong><small>Siendo atendidos</small></div>
-              <b>12</b>
+              <b>{{ activeCount() }}</b>
             </div>
             <div class="teacher-week-summary__row">
               <span class="is-muted"></span>
               <div><strong>Resueltos</strong><small>Archivados hoy</small></div>
-              <b>28</b>
+              <b>{{ resolvedCount() }}</b>
             </div>
-            <button type="button" class="btn-checkmate btn-checkmate-secondary">
+            <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="showWeeklyReport()">
               Ver Reporte Completo
             </button>
           </article>
@@ -114,7 +121,7 @@ import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
             <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
             <h2>Protocolo de Emergencia</h2>
             <p>Recuerda siempre evacuar antes de reportar un incidente de nivel 5.</p>
-            <a routerLink="/teacher/incidents/new"
+            <a [routerLink]="incidentBaseRoute() + '/new'"
               >Leer guia <i class="fa-solid fa-arrow-right"></i
             ></a>
           </article>
@@ -124,5 +131,47 @@ import { TEACHER_INCIDENTS } from '../../../../core/mocks/teacher.mock';
   `,
 })
 export class TeacherIncidentsComponent {
-  protected readonly incidents = TEACHER_INCIDENTS;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
+  private readonly toastService = inject(ToastService);
+  private readonly teacherApi = inject(TeacherPortalApiService);
+
+  protected incidents: TeacherIncidentView[] = [];
+
+  constructor() {
+    this.teacherApi
+      .getIncidents()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((incidents) => {
+        this.incidents = incidents;
+      });
+  }
+
+  protected incidentBaseRoute(): string {
+    return this.router.url.startsWith('/tutor') ? '/tutor/incidents' : '/teacher/incidents';
+  }
+
+  protected showWeeklyReport(): void {
+    this.toastService.info('Reporte semanal', 'El resumen completo se generara con los datos actuales.');
+  }
+
+  protected showFilterInfo(filter: 'fecha' | 'tipo'): void {
+    this.toastService.info('Filtro aplicado', `Filtro por ${filter} preparado para la consulta.`);
+  }
+
+  protected lastIncidentLocation(): string {
+    return this.incidents[0]?.location ?? '';
+  }
+
+  protected criticalCount(): number {
+    return this.incidents.filter((incident) => incident.tone === 'danger').length;
+  }
+
+  protected activeCount(): number {
+    return this.incidents.filter((incident) => incident.status.toUpperCase().includes('ACT')).length;
+  }
+
+  protected resolvedCount(): number {
+    return this.incidents.filter((incident) => incident.status.toUpperCase().includes('RES')).length;
+  }
 }

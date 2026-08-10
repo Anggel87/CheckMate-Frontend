@@ -1,5 +1,11 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { TEACHER_EMERGENCY_STUDENTS } from '../../../../core/mocks/teacher.mock';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
+import {
+  TeacherEmergencyStudentView,
+  TeacherIncidentDetailView,
+  TeacherPortalApiService,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 
@@ -13,22 +19,14 @@ type EmergencyMark = 'present' | 'absent' | '';
       <header class="teacher-page__header">
         <div>
           <h1>Lista de alumnos emergencia</h1>
-          <p>Verify the status of all students in the current zone.</p>
+          <p>{{ incident?.title || 'Incidente activo' }}</p>
         </div>
       </header>
 
       <div class="teacher-emergency-layout">
         <section aria-label="Lista de alumnos">
           <div class="teacher-tabs">
-            <button type="button" class="is-active">TICS</button>
-            <button type="button">Mecatronica</button>
-          </div>
-          <div class="teacher-group-tabs" aria-label="Grupos">
-            <button type="button" class="is-active">1-A</button>
-            <button type="button">1-B</button>
-            <button type="button">2-A</button>
-            <button type="button">2-B</button>
-            <button type="button">5-A</button>
+            <button type="button" class="is-active">API real</button>
           </div>
 
           <div class="teacher-emergency-student-list">
@@ -68,6 +66,8 @@ type EmergencyMark = 'present' | 'absent' | '';
                   </div>
                 }
               </article>
+            } @empty {
+              <p class="dropdown-empty">No hay alumnos asociados al incidente activo.</p>
             }
           </div>
         </section>
@@ -83,19 +83,10 @@ type EmergencyMark = 'present' | 'absent' | '';
             ></textarea>
           </section>
 
-          <section class="teacher-card teacher-comment-card">
-            <h2><i class="fa-solid fa-camera" aria-hidden="true"></i> Evidencia</h2>
-            <label class="teacher-file-drop" for="emergency-evidence">
-              <input id="emergency-evidence" type="file" accept=".png,.jpg,.jpeg" />
-              <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-              <span>Click or drag files to upload</span>
-              <small>PNG, JPG up to 10MB</small>
-            </label>
-          </section>
-
           <button
             type="button"
             class="btn-checkmate btn-checkmate-success teacher-emergency-save"
+            [disabled]="saving()"
             (click)="save()"
           >
             <i class="fa-regular fa-floppy-disk" aria-hidden="true"></i>
@@ -111,24 +102,47 @@ type EmergencyMark = 'present' | 'absent' | '';
   `,
 })
 export class TeacherEmergencyListComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly dialogService = inject(DialogService);
   private readonly toastService = inject(ToastService);
+  private readonly teacherApi = inject(TeacherPortalApiService);
 
-  protected readonly students = TEACHER_EMERGENCY_STUDENTS;
-  protected readonly marks = signal<Record<string, EmergencyMark>>(
-    Object.fromEntries(
-      this.students.map((student) => [student.id, student.status === 'PRESENTE' ? 'present' : '']),
-    ) as Record<string, EmergencyMark>,
-  );
+  protected readonly marks = signal<Record<string, EmergencyMark>>({});
+  protected readonly saving = signal(false);
   protected readonly checkedCount = computed(
     () => Object.values(this.marks()).filter((mark) => mark !== '').length,
   );
+  protected incident: TeacherIncidentDetailView | null = null;
+  protected students: TeacherEmergencyStudentView[] = [];
+
+  constructor() {
+    this.teacherApi
+      .getEmergencyIncident()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((incident) => {
+        this.incident = incident;
+        this.students = incident.students;
+        this.marks.set(
+          Object.fromEntries(
+            incident.students.map((student) => [
+              student.id,
+              student.status === 'PRESENTE' ? 'present' : student.status === 'AUSENTE' ? 'absent' : '',
+            ]),
+          ) as Record<string, EmergencyMark>,
+        );
+      });
+  }
 
   protected mark(studentId: string, value: EmergencyMark): void {
     this.marks.update((current) => ({ ...current, [studentId]: value }));
   }
 
   protected async save(): Promise<void> {
+    if (!this.incident?.id) {
+      this.toastService.error('Sin incidente activo', 'No hay un incidente activo para actualizar.');
+      return;
+    }
+
     const confirmed = await this.dialogService.confirm({
       title: 'Guardar lista de emergencia',
       message: 'Se registrara el estado actual de los alumnos verificados.',
@@ -141,6 +155,20 @@ export class TeacherEmergencyListComponent {
       return;
     }
 
-    this.toastService.success('Lista guardada', 'La verificacion de emergencia fue registrada.');
+    this.saving.set(true);
+    this.teacherApi
+      .updateIncidentStudents(this.incident.id, this.marks())
+      .pipe(
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.toastService.success('Lista guardada', 'La verificacion fue enviada a la API.');
+        },
+        error: () => {
+          this.toastService.error('No se pudo guardar', 'La API rechazo la verificacion.');
+        },
+      });
   }
 }

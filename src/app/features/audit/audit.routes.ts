@@ -1,15 +1,19 @@
 import { Routes } from '@angular/router';
 
+const loadManagementWorkspace = () =>
+  import('../management/pages/management-workspace/management-workspace.component').then(
+    (component) => component.ManagementWorkspaceComponent,
+  );
+
 export const AUDIT_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
-      ),
-    data: {
-      title: 'Auditoría',
-      description: 'Consulta trazabilidad de acciones relevantes del sistema.',
-    },
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'audit', topbarTitle: 'Auditoria' },
+  },
+  {
+    path: ':entity',
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'audit-list', topbarTitle: 'Auditoria' },
   },
 ];

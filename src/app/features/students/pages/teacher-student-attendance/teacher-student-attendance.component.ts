@@ -1,10 +1,13 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import {
-  TEACHER_STUDENT_ATTENDANCE_HISTORY,
-  TEACHER_STUDENT_PROFILE,
-} from '../../../../core/mocks/teacher.mock';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import {
+  EMPTY_TEACHER_STUDENT_PROFILE,
+  TeacherAttendanceHistoryView,
+  TeacherPortalApiService,
+  TeacherStudentProfileView,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
   selector: 'app-teacher-student-attendance',
@@ -15,43 +18,37 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
       <nav class="teacher-profile-route" aria-label="Ruta de navegacion">
         <a routerLink="/teacher/groups">Tus grupos</a>
         <span>/</span>
-        <a routerLink="/teacher/groups/1-a/students">3° A - Matutino</a>
-        <span>/</span>
-        <strong>Alejandro Garcia</strong>
+        <strong>{{ student.fullName || 'Alumno' }}</strong>
       </nav>
 
       <article class="teacher-card teacher-student-summary-strip">
         <img [src]="student.avatarUrl" [alt]="'Foto de ' + student.fullName" />
         <div>
-          <h1>{{ student.fullName }}</h1>
-          <p><i class="fa-regular fa-id-card"></i> ID: 2023045 <span>3° A - Matutino</span></p>
+          <h1>{{ student.fullName || 'Alumno' }}</h1>
+          <p><i class="fa-regular fa-id-card"></i> ID: {{ student.enrollment }} <span>{{ student.group }}</span></p>
         </div>
         <div>
-          <a class="btn-checkmate btn-checkmate-secondary" href="mailto:j.ramirez@checkmate.edu.mx">
+          <a class="btn-checkmate btn-checkmate-secondary" [href]="'mailto:' + student.email">
             <i class="fa-regular fa-envelope" aria-hidden="true"></i>
-            Contactar Tutor
+            Contactar
           </a>
-          <button type="button" class="btn-checkmate btn-checkmate-primary">
-            <i class="fa-solid fa-plus" aria-hidden="true"></i>
-            Nueva Justificacion
-          </button>
         </div>
       </article>
 
       <section class="teacher-stats-grid">
         <article class="teacher-stat-card">
           <span>Total asistencias</span>
-          <strong>142 <small>Este semestre</small></strong>
+          <strong>{{ records.length }}</strong>
           <i class="fa-regular fa-circle-check is-success" aria-hidden="true"></i>
         </article>
         <article class="teacher-stat-card">
           <span>Inasistencias</span>
-          <strong>5 <small>Sin justificar: 2</small></strong>
+          <strong>{{ absentCount() }}</strong>
           <i class="fa-regular fa-circle-xmark is-danger" aria-hidden="true"></i>
         </article>
         <article class="teacher-stat-card">
           <span>Retardos</span>
-          <strong>3 <small>Acumulados</small></strong>
+          <strong>{{ lateCount() }}</strong>
           <i class="fa-regular fa-clock is-warning" aria-hidden="true"></i>
         </article>
       </section>
@@ -59,17 +56,6 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
       <section class="teacher-table-card" aria-label="Historial de asistencias">
         <header class="teacher-table-card__header">
           <h2>Historial de Asistencias</h2>
-          <div class="teacher-filter-actions">
-            <button type="button" class="teacher-filter-button">
-              Todas las fechas <i class="fa-solid fa-chevron-down"></i>
-            </button>
-            <button type="button" class="teacher-filter-button">
-              Todas las materias <i class="fa-solid fa-chevron-down"></i>
-            </button>
-            <button type="button" class="teacher-filter-button">
-              Todos los estados <i class="fa-solid fa-chevron-down"></i>
-            </button>
-          </div>
         </header>
 
         <div class="teacher-table teacher-history-table">
@@ -94,25 +80,51 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
                 <i class="fa-regular fa-eye" aria-hidden="true"></i>
               </button>
             </div>
+          } @empty {
+            <div class="teacher-table__row">
+              <span>Sin registros de asistencia para este alumno.</span>
+            </div>
           }
         </div>
 
         <footer class="teacher-table-footer">
-          <span>Mostrando 1 a 5 de 142 asistencias</span>
-          <div>
-            <button type="button" class="icon-button" aria-label="Pagina anterior">
-              <i class="fa-solid fa-chevron-left"></i>
-            </button>
-            <button type="button" class="icon-button" aria-label="Pagina siguiente">
-              <i class="fa-solid fa-chevron-right"></i>
-            </button>
-          </div>
+          <span>Mostrando {{ records.length }} asistencias</span>
         </footer>
       </section>
     </section>
   `,
 })
 export class TeacherStudentAttendanceComponent {
-  protected readonly student = TEACHER_STUDENT_PROFILE;
-  protected readonly records = TEACHER_STUDENT_ATTENDANCE_HISTORY;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly teacherApi = inject(TeacherPortalApiService);
+
+  protected student: TeacherStudentProfileView = EMPTY_TEACHER_STUDENT_PROFILE;
+  protected records: TeacherAttendanceHistoryView[] = [];
+
+  constructor() {
+    const studentId = this.route.snapshot.paramMap.get('studentId');
+
+    this.teacherApi
+      .getStudentProfile(studentId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((student) => {
+        this.student = student;
+      });
+
+    this.teacherApi
+      .getStudentAttendance(studentId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((records) => {
+        this.records = records;
+      });
+  }
+
+  protected absentCount(): number {
+    return this.records.filter((record) => record.statusTone === 'absent').length;
+  }
+
+  protected lateCount(): number {
+    return this.records.filter((record) => record.statusTone === 'late').length;
+  }
 }

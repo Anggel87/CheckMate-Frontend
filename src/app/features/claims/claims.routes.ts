@@ -1,15 +1,19 @@
 import { Routes } from '@angular/router';
 
+const loadManagementWorkspace = () =>
+  import('../management/pages/management-workspace/management-workspace.component').then(
+    (component) => component.ManagementWorkspaceComponent,
+  );
+
 export const CLAIMS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
-      ),
-    data: {
-      title: 'Reclamos',
-      description: 'Gestiona solicitudes de corrección relacionadas con asistencia.',
-    },
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'claims', topbarTitle: 'Reclamos' },
+  },
+  {
+    path: ':claimId',
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'claim-detail', topbarTitle: 'Reclamo' },
   },
 ];

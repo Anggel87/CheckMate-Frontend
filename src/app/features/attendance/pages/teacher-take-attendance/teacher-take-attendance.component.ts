@@ -1,6 +1,13 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { AttendanceMark, TEACHER_ATTENDANCE_STUDENTS } from '../../../../core/mocks/teacher.mock';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { finalize } from 'rxjs';
+import {
+  AttendanceMark,
+  TeacherAttendanceStudentView,
+  TeacherClassView,
+  TeacherPortalApiService,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 
@@ -12,8 +19,8 @@ import { ToastService } from '../../../../shared/feedback/services/toast.service
     <section class="teacher-page teacher-attendance-page">
       <header class="teacher-attendance-header">
         <div>
-          <h1>Pasar Lista: Redes</h1>
-          <p>Grupo 3-B • 17:00 a 18:40 • Lunes</p>
+          <h1>Pasar Lista: {{ classItem?.subject || 'Clase' }}</h1>
+          <p>{{ classItem?.group || 'Grupo' }} - {{ classItem?.start }} a {{ classItem?.end }}</p>
         </div>
 
         <div class="teacher-attendance-stats" aria-label="Resumen de asistencia">
@@ -53,7 +60,7 @@ import { ToastService } from '../../../../shared/feedback/services/toast.service
             <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
             Nuevo Incidente
           </a>
-          <button type="button" class="btn-checkmate btn-checkmate-success" (click)="save()">
+          <button type="button" class="btn-checkmate btn-checkmate-success" [disabled]="saving()" (click)="save()">
             <i class="fa-regular fa-floppy-disk" aria-hidden="true"></i>
             Guardar
           </button>
@@ -110,27 +117,48 @@ import { ToastService } from '../../../../shared/feedback/services/toast.service
               </button>
             </div>
           </article>
+        } @empty {
+          <article class="teacher-card">
+            <p class="dropdown-empty">No hay alumnos cargados para este horario.</p>
+          </article>
         }
       </section>
     </section>
   `,
 })
 export class TeacherTakeAttendanceComponent {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
   private readonly dialogService = inject(DialogService);
   private readonly toastService = inject(ToastService);
+  private readonly teacherApi = inject(TeacherPortalApiService);
 
-  protected readonly students = TEACHER_ATTENDANCE_STUDENTS;
-  protected readonly marks = signal<Record<string, AttendanceMark>>(
-    Object.fromEntries(this.students.map((student) => [student.id, student.status])) as Record<
-      string,
-      AttendanceMark
-    >,
-  );
-  protected readonly presentCount = computed(
-    () =>
-      this.students.filter((student) => !student.disabled && this.marks()[student.id] === 'present')
-        .length,
-  );
+  protected readonly saving = signal(false);
+  protected readonly marks = signal<Record<string, AttendanceMark>>({});
+  protected students: TeacherAttendanceStudentView[] = [];
+  protected classItem: TeacherClassView | null = null;
+
+  constructor() {
+    this.teacherApi
+      .getAttendanceContext(this.route.snapshot.paramMap.get('classId'))
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((context) => {
+        this.classItem = context.classItem;
+        this.students = context.students;
+        this.marks.set(
+          Object.fromEntries(context.students.map((student) => [student.id, student.status])) as Record<
+            string,
+            AttendanceMark
+          >,
+        );
+      });
+  }
+
+  protected presentCount(): number {
+    return this.students.filter(
+      (student) => !student.disabled && this.marks()[student.id] === 'present',
+    ).length;
+  }
 
   protected markAll(status: AttendanceMark): void {
     this.marks.update((current) => {
@@ -153,9 +181,16 @@ export class TeacherTakeAttendanceComponent {
   }
 
   protected async save(): Promise<void> {
+    const scheduleId = this.classItem?.scheduleId;
+
+    if (!scheduleId) {
+      this.toastService.error('Horario no encontrado', 'Abre el pase de lista desde una clase real.');
+      return;
+    }
+
     const confirmed = await this.dialogService.confirm({
       title: 'Guardar asistencia',
-      message: 'Se registraran los estados seleccionados para el grupo 3-B.',
+      message: 'Se registraran los estados seleccionados en la API.',
       confirmText: 'Guardar',
       variant: 'success',
       icon: 'fa-regular fa-floppy-disk',
@@ -165,6 +200,23 @@ export class TeacherTakeAttendanceComponent {
       return;
     }
 
-    this.toastService.success('Asistencia guardada', 'La lista fue actualizada correctamente.');
+    this.saving.set(true);
+    this.teacherApi
+      .saveAttendance(scheduleId, this.marks(), this.classItem?.sessionId)
+      .pipe(
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.toastService.success('Asistencia guardada', 'La lista fue registrada en la API.');
+        },
+        error: () => {
+          this.toastService.error(
+            'No se pudo guardar la asistencia',
+            'La API rechazo la apertura o actualizacion de la sesion.',
+          );
+        },
+      });
   }
 }

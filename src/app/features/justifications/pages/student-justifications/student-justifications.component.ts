@@ -1,8 +1,12 @@
-import { Component, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
-import { STUDENT_JUSTIFICATIONS } from '../../../../core/mocks/student.mock';
+import {
+  StudentJustificationView,
+  StudentPortalApiService,
+} from '../../../student-portal/data-access/student-portal-api.service';
 
 @Component({
   selector: 'app-student-justifications',
@@ -77,7 +81,7 @@ import { STUDENT_JUSTIFICATIONS } from '../../../../core/mocks/student.mock';
       </article>
 
       <footer class="student-table-footer">
-        <span>Mostrando 1 a 3 de 3 registros</span>
+        <span>Mostrando {{ justifications.length }} registros</span>
         <div class="student-pagination" aria-label="Paginacion de justificantes">
           <button type="button" disabled aria-label="Pagina anterior">
             <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -92,7 +96,19 @@ import { STUDENT_JUSTIFICATIONS } from '../../../../core/mocks/student.mock';
   `,
 })
 export class StudentJustificationsComponent {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly studentApi = inject(StudentPortalApiService);
+
   protected readonly activeTab = signal('Todos');
   protected readonly tabs = ['Todos', 'Pendientes', 'Aprobados', 'Rechazados'];
-  protected readonly justifications = STUDENT_JUSTIFICATIONS;
+  protected justifications: StudentJustificationView[] = [];
+
+  constructor() {
+    this.studentApi
+      .getJustifications()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((justifications) => {
+        this.justifications = justifications;
+      });
+  }
 }

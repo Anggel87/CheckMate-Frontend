@@ -1,7 +1,11 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { TEACHER_GROUP_STUDENTS } from '../../../../core/mocks/teacher.mock';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import {
+  TeacherPortalApiService,
+  TeacherStudentView,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
   selector: 'app-teacher-group-students',
@@ -11,8 +15,8 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
     <section class="teacher-page">
       <header class="teacher-page__header teacher-page__header--filters">
         <div>
-          <h1>Alumnos del Grupo 1-A</h1>
-          <p>Introduccion a las TIC • Ciclo 2023-2024</p>
+          <h1>Alumnos del Grupo</h1>
+          <p>Listado obtenido desde la API.</p>
         </div>
 
         <div class="teacher-filter-actions">
@@ -69,6 +73,10 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
                 Ver Perfil
               </a>
             </div>
+          } @empty {
+            <div class="teacher-table__row">
+              <span>No hay alumnos activos para este grupo.</span>
+            </div>
           }
         </div>
       </section>
@@ -76,7 +84,20 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
   `,
 })
 export class TeacherGroupStudentsComponent {
-  protected readonly students = TEACHER_GROUP_STUDENTS;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly teacherApi = inject(TeacherPortalApiService);
+
+  protected students: TeacherStudentView[] = [];
+
+  constructor() {
+    this.teacherApi
+      .getGroupStudents(this.route.snapshot.paramMap.get('groupId') ?? '')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((students) => {
+        this.students = students;
+      });
+  }
 
   protected initials(name: string): string {
     return name

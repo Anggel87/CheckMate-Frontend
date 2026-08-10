@@ -1,6 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { TEACHER_GROUPS } from '../../../../core/mocks/teacher.mock';
+import {
+  TeacherGroupView,
+  TeacherPortalApiService,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
   selector: 'app-teacher-groups',
@@ -49,11 +53,27 @@ import { TEACHER_GROUPS } from '../../../../core/mocks/teacher.mock';
               </a>
             </footer>
           </article>
+        } @empty {
+          <article class="teacher-card">
+            <p class="dropdown-empty">No hay grupos asignados desde la API.</p>
+          </article>
         }
       </section>
     </section>
   `,
 })
 export class TeacherGroupsComponent {
-  protected readonly groups = TEACHER_GROUPS;
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly teacherApi = inject(TeacherPortalApiService);
+
+  protected groups: TeacherGroupView[] = [];
+
+  constructor() {
+    this.teacherApi
+      .getGroups()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((groups) => {
+        this.groups = groups;
+      });
+  }
 }

@@ -1,11 +1,12 @@
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/authentication/auth.service';
 import { PermissionService } from '../../../core/authorization/permission.service';
 import { getNavigationForRole } from '../../../core/config/navigation.config';
 import { ROUTE_PATHS } from '../../../core/constants/route-paths.constants';
-import { UserRole, getUserRoleLabel } from '../../../core/enums/user-role.enum';
+import { UserRole } from '../../../core/enums/user-role.enum';
 import { NavigationItem } from '../../../core/models/menu-item.model';
+import { DialogService } from '../../../shared/feedback/services/dialog.service';
 
 @Component({
   selector: 'app-sidebar',
@@ -16,15 +17,17 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       class="checkmate-sidebar"
       [class.is-collapsed]="collapsed"
       [class.is-mobile-open]="mobileOpen"
-      aria-label="Navegación principal"
+      aria-label="Navegacion principal"
     >
       <div class="checkmate-sidebar__brand">
         <a [routerLink]="homeRoute()" (click)="closeMobile.emit()">
-          @if (collapsed) {
-            <strong>CM</strong>
-          } @else {
-            <strong>CheckMate</strong>
-            <span>{{ roleLabel() }}</span>
+          <img
+            class="checkmate-sidebar__logo"
+            src="/img/logos/isotipowhite.png"
+            alt="CheckMate"
+          />
+          @if (!collapsed) {
+            <span class="checkmate-sidebar__role">{{ sidebarRoleLabel() }}</span>
           }
         </a>
       </div>
@@ -32,7 +35,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       <button
         type="button"
         class="checkmate-sidebar__collapse"
-        [attr.aria-label]="collapsed ? 'Expandir menú' : 'Contraer menú'"
+        [attr.aria-label]="collapsed ? 'Expandir menu' : 'Contraer menu'"
         (click)="collapseToggle.emit()"
       >
         <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
@@ -56,7 +59,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
       </nav>
 
       <div class="checkmate-sidebar__footer">
-        @if (isStudent()) {
+        @if (showSettingsLink()) {
           <a
             class="checkmate-sidebar-link"
             [routerLink]="settingsRoute()"
@@ -68,10 +71,13 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
               <span>Ajustes</span>
             }
           </a>
-        } @else {
+        }
+
+        @if (showTeacherAttendanceShortcut()) {
           <a
             class="btn-checkmate btn-checkmate-light"
             [routerLink]="attendanceRoute()"
+            [title]="collapsed ? 'Pasar lista' : ''"
             (click)="closeMobile.emit()"
           >
             <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i>
@@ -80,28 +86,21 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
             }
           </a>
         }
-        @if (!isStudent()) {
-          <a
-            class="checkmate-sidebar-link"
-            routerLink="/help"
-            [title]="collapsed ? 'Ayuda' : ''"
-            (click)="closeMobile.emit()"
-          >
-            <i class="fa-solid fa-circle-question" aria-hidden="true"></i>
-            @if (!collapsed) {
-              <span>Ayuda</span>
-            }
-          </a>
-        }
+
         <button
           type="button"
           class="checkmate-sidebar-link checkmate-sidebar-logout"
-          [title]="collapsed ? 'Cerrar sesión' : ''"
+          [title]="collapsed ? 'Cerrar sesion' : ''"
+          [disabled]="signingOut()"
           (click)="signOut()"
         >
-          <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+          @if (signingOut()) {
+            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+          } @else {
+            <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+          }
           @if (!collapsed) {
-            <span>Cerrar sesión</span>
+            <span>{{ signingOut() ? 'Cerrando...' : 'Cerrar sesion' }}</span>
           }
         </button>
       </div>
@@ -111,12 +110,15 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
 export class SidebarComponent {
   private readonly authService = inject(AuthService);
   private readonly permissionService = inject(PermissionService);
+  private readonly dialogService = inject(DialogService);
   private readonly router = inject(Router);
 
   @Input() collapsed = false;
   @Input() mobileOpen = false;
   @Output() readonly closeMobile = new EventEmitter<void>();
   @Output() readonly collapseToggle = new EventEmitter<void>();
+
+  protected readonly signingOut = signal(false);
 
   protected menuItems(): NavigationItem[] {
     const user = this.authService.currentUser();
@@ -142,18 +144,28 @@ export class SidebarComponent {
     return this.authService.getHomeUrl();
   }
 
-  protected roleLabel(): string {
+  protected sidebarRoleLabel(): string {
     const role = this.authService.currentUser()?.role;
+    const labels: Record<UserRole, string> = {
+      [UserRole.ADMIN]: 'ADMINISTRADOR',
+      [UserRole.CAREER_DIRECTOR]: 'DIRECTOR',
+      [UserRole.TEACHER]: 'PROFESOR',
+      [UserRole.TUTOR_TEACHER]: 'TUTOR',
+      [UserRole.STUDENT]: 'ALUMNO',
+    };
 
-    if (role === UserRole.TEACHER) {
-      return 'Portal del Profesor';
-    }
-
-    return role ? getUserRoleLabel(role) : '';
+    return role ? labels[role] : '';
   }
 
-  protected isStudent(): boolean {
-    return this.authService.currentUser()?.role === UserRole.STUDENT;
+  protected showSettingsLink(): boolean {
+    return this.permissionService.hasPermission('settings.view');
+  }
+
+  protected showTeacherAttendanceShortcut(): boolean {
+    return (
+      this.authService.currentUser()?.role === UserRole.TEACHER &&
+      this.permissionService.hasPermission('attendance.view')
+    );
   }
 
   protected isMenuItemActive(item: NavigationItem): boolean {
@@ -163,7 +175,25 @@ export class SidebarComponent {
     );
   }
 
-  protected signOut(): void {
+  protected async signOut(): Promise<void> {
+    if (this.signingOut()) {
+      return;
+    }
+
+    const confirmed = await this.dialogService.confirm({
+      title: 'Cerrar sesion?',
+      message: 'Estas seguro de que deseas cerrar tu sesion?',
+      confirmText: 'Cerrar sesion',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-solid fa-arrow-right-from-bracket',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.signingOut.set(true);
     this.authService.signOut();
     this.closeMobile.emit();
   }

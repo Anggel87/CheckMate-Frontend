@@ -1,0 +1,707 @@
+import { Injectable, inject } from '@angular/core';
+import { Observable, catchError, forkJoin, map, of, switchMap } from 'rxjs';
+import {
+  UnknownRecord,
+  formatApiDate,
+  formatApiTime,
+  initialsFromName,
+  readFirstString,
+  readFullName,
+  readId,
+  readNumber,
+  readString,
+  toRecord,
+  toneFromAttendanceStatus,
+  toneFromRequestStatus,
+  unwrapData,
+} from '../../../core/api/api-adapter';
+import { CheckmateApiService } from '../../../core/api/checkmate-api.service';
+import { StatusBadgeTone } from '../../../shared/components/status-badge/status-badge.component';
+
+export type AttendanceMark = 'present' | 'late' | 'absent' | 'justified';
+
+export interface TeacherClassView {
+  id: string;
+  scheduleId: string;
+  groupId: string;
+  start: string;
+  end: string;
+  group: string;
+  classroom: string;
+  subject: string;
+  status: 'done' | 'active' | 'next';
+  countdown?: string;
+  sessionId?: string;
+}
+
+export interface TeacherGroupView {
+  id: string;
+  group: string;
+  career: string;
+  subject: string;
+  description: string;
+  students: number;
+}
+
+export interface TeacherStudentView {
+  id: string;
+  name: string;
+  email: string;
+  enrollment: string;
+  group: string;
+  status: string;
+  statusTone: StatusBadgeTone;
+  attendance: number;
+  avatarUrl?: string;
+}
+
+export interface TeacherAttendanceStudentView {
+  id: string;
+  name: string;
+  enrollment: string;
+  avatarUrl: string;
+  status: AttendanceMark;
+  disabled?: boolean;
+}
+
+export interface TeacherIncidentView {
+  id: string;
+  type: string;
+  title: string;
+  date: string;
+  location: string;
+  reporter: string;
+  priority: string;
+  tone: StatusBadgeTone;
+  icon: string;
+  status: string;
+  description: string;
+  evidenceUrl: string;
+}
+
+export interface TeacherIncidentDetailView extends TeacherIncidentView {
+  students: TeacherEmergencyStudentView[];
+  history: TeacherTimelineItemView[];
+}
+
+export interface TeacherEmergencyStudentView {
+  id: string;
+  name: string;
+  enrollment: string;
+  status: 'PRESENTE' | 'AUSENTE' | '';
+}
+
+export interface TeacherTimelineItemView {
+  title: string;
+  description: string;
+  date: string;
+}
+
+export interface TeacherAttendanceHistoryView {
+  id: string;
+  date: string;
+  subject: string;
+  time: string;
+  status: string;
+  statusTone: StatusBadgeTone;
+}
+
+export interface TeacherJustificationHistoryView {
+  id: string;
+  date: string;
+  type: string;
+  typeTone: StatusBadgeTone;
+  subject: string;
+  evidenceIcon: string;
+}
+
+export interface TeacherStudentProfileView {
+  id: string;
+  name: string;
+  fullName: string;
+  enrollment: string;
+  email: string;
+  group: string;
+  department: string;
+  tutor: string;
+  avatarUrl: string;
+  attendance: number;
+  justifications: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+}
+
+export interface TeacherAttendanceContextView {
+  classItem: TeacherClassView | null;
+  students: TeacherAttendanceStudentView[];
+}
+
+export interface TeacherIncidentPayload {
+  type: string;
+  title: string;
+  description: string;
+  severity: string;
+  evidence?: File | null;
+}
+
+export const EMPTY_TEACHER_STUDENT_PROFILE: TeacherStudentProfileView = {
+  id: '',
+  name: '',
+  fullName: '',
+  enrollment: '',
+  email: '',
+  group: '',
+  department: '',
+  tutor: '',
+  avatarUrl: '/profile-avatar.svg',
+  attendance: 0,
+  justifications: '0',
+  emergencyContact: '',
+  emergencyPhone: '',
+};
+
+export const EMPTY_TEACHER_INCIDENT_DETAIL: TeacherIncidentDetailView = {
+  id: '',
+  type: '',
+  title: '',
+  date: '',
+  location: '',
+  reporter: '',
+  priority: '',
+  tone: 'neutral',
+  icon: 'fa-regular fa-circle-question',
+  status: '',
+  description: '',
+  evidenceUrl: '',
+  students: [],
+  history: [],
+};
+
+@Injectable({
+  providedIn: 'root',
+})
+export class TeacherPortalApiService {
+  private readonly api = inject(CheckmateApiService);
+
+  getTodayClasses(): Observable<TeacherClassView[]> {
+    return this.api.getCollection('/profesor/schedule/today', (item) => this.toClass(item));
+  }
+
+  getGroups(): Observable<TeacherGroupView[]> {
+    return this.api.getCollection('/profesor/groups', (item) => this.toGroup(item));
+  }
+
+  getGroupStudents(groupId: string): Observable<TeacherStudentView[]> {
+    return this.api.getCollection(`/profesor/groups/${groupId}/students`, (item) =>
+      this.toGroupStudent(item),
+    );
+  }
+
+  getAttendanceContext(scheduleId: string | null): Observable<TeacherAttendanceContextView> {
+    if (!scheduleId) {
+      return of({ classItem: null, students: [] });
+    }
+
+    return this.getTodayClasses().pipe(
+      map((classes) => classes.find((classItem) => classItem.scheduleId === scheduleId || classItem.id === scheduleId) ?? null),
+      switchMap((classItem) => {
+        if (!classItem?.groupId) {
+          return of({ classItem, students: [] });
+        }
+
+        return this.getGroupStudents(classItem.groupId).pipe(
+          map((students) => ({
+            classItem,
+            students: students.map((student) => this.toAttendanceStudent(student)),
+          })),
+        );
+      }),
+    );
+  }
+
+  saveAttendance(
+    scheduleId: string,
+    marks: Record<string, AttendanceMark>,
+    existingSessionId?: string,
+  ): Observable<boolean> {
+    const session$ = existingSessionId
+      ? of(existingSessionId)
+      : this.api
+          .post<unknown>('/profesor/sessions/open', {
+            schedule_id: Number(scheduleId),
+            date: new Date().toISOString().slice(0, 10),
+          })
+          .pipe(map((response) => this.sessionIdFromResponse(response)));
+
+    return session$.pipe(
+      switchMap((sessionId) => {
+        const updates = Object.entries(marks)
+          .filter(([, status]) => status !== 'justified')
+          .map(([studentId, status]) =>
+            this.api
+              .patch<unknown>(`/profesor/sessions/${sessionId}/students/${studentId}`, {
+                status: this.toApiAttendanceStatus(status),
+              })
+              .pipe(map(() => true)),
+          );
+
+        return updates.length ? forkJoin(updates).pipe(map(() => true)) : of(true);
+      }),
+    );
+  }
+
+  getIncidents(): Observable<TeacherIncidentView[]> {
+    return this.api.getCollection('/profesor/incidents', (item) => this.toIncident(item));
+  }
+
+  getActiveIncidents(): Observable<TeacherIncidentView[]> {
+    return this.api.getCollection('/profesor/incidents/active', (item) => this.toIncident(item));
+  }
+
+  getIncident(incidentId: string | null): Observable<TeacherIncidentDetailView> {
+    if (!incidentId) {
+      return of(EMPTY_TEACHER_INCIDENT_DETAIL);
+    }
+
+    return this.api.get<unknown>(`/profesor/incidents/${incidentId}`).pipe(
+      map((response) => this.toIncidentDetail(unwrapData(response))),
+    );
+  }
+
+  getEmergencyIncident(): Observable<TeacherIncidentDetailView> {
+    return this.getActiveIncidents().pipe(
+      map((incidents) => incidents[0]?.id ?? null),
+      switchMap((incidentId) => this.getIncident(incidentId)),
+      catchError(() => of(EMPTY_TEACHER_INCIDENT_DETAIL)),
+    );
+  }
+
+  createIncident(payload: TeacherIncidentPayload): Observable<boolean> {
+    const formData = new FormData();
+    formData.set('type', payload.type);
+    formData.set('title', payload.title);
+    formData.set('description', payload.description);
+    formData.set('severity', payload.severity);
+
+    if (payload.evidence) {
+      formData.set('evidence', payload.evidence);
+    }
+
+    return this.api.post<unknown>('/profesor/incidents', formData).pipe(map(() => true));
+  }
+
+  updateIncidentStudents(
+    incidentId: string,
+    marks: Record<string, 'present' | 'absent' | ''>,
+  ): Observable<boolean> {
+    const students = Object.entries(marks)
+      .filter(([, status]) => status !== '')
+      .map(([studentId, status]) => ({
+        student_id: Number(studentId),
+        present: status === 'present',
+      }));
+
+    if (!students.length) {
+      return of(true);
+    }
+
+    return this.api
+      .patch<unknown>(`/profesor/incidents/${incidentId}/students`, {
+        students,
+      })
+      .pipe(map(() => true));
+  }
+
+  getStudentProfile(studentId: string | null): Observable<TeacherStudentProfileView> {
+    if (!studentId) {
+      return of(EMPTY_TEACHER_STUDENT_PROFILE);
+    }
+
+    return forkJoin({
+      profile: this.api
+        .get<unknown>(`/profesor/students/${studentId}`)
+        .pipe(map((response) => this.toStudentProfile(unwrapData(response), studentId))),
+      attendance: this.getStudentAttendance(studentId).pipe(catchError(() => of([]))),
+      justifications: this.getStudentJustifications(studentId).pipe(catchError(() => of([]))),
+    }).pipe(
+      map(({ profile, attendance, justifications }) => ({
+        ...profile,
+        attendance: this.attendanceRate(attendance),
+        justifications: String(justifications.length).padStart(2, '0'),
+      })),
+    );
+  }
+
+  getStudentAttendance(studentId: string | null): Observable<TeacherAttendanceHistoryView[]> {
+    if (!studentId) {
+      return of([]);
+    }
+
+    return this.api.getCollection(`/profesor/students/${studentId}/attendance`, (item) =>
+      this.toAttendanceHistory(item),
+    );
+  }
+
+  getStudentJustifications(studentId: string | null): Observable<TeacherJustificationHistoryView[]> {
+    if (!studentId) {
+      return of([]);
+    }
+
+    return this.api.getCollection(`/profesor/students/${studentId}/justifications`, (item) =>
+      this.toJustificationHistory(item),
+    );
+  }
+
+  private toClass(value: unknown): TeacherClassView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const group = toRecord(record?.['group']);
+    const classroom = toRecord(record?.['classroom']);
+    const start = readFirstString(record, ['start_time', 'start']);
+    const end = readFirstString(record, ['end_time', 'end']);
+    const status = this.classStatus(start, end, readBooleanLike(record, 'session_open'));
+    const scheduleId = readFirstString(record, ['schedule_id', 'id']);
+
+    return {
+      id: scheduleId,
+      scheduleId,
+      groupId: readFirstString(group, ['id', 'group_id'], readString(record, 'group_id')),
+      start,
+      end,
+      group: this.groupLabel(group),
+      classroom: readFirstString(classroom, ['name', 'label'], readString(record, 'classroom')),
+      subject: readString(subject, 'name', readString(record, 'subject')),
+      status,
+      countdown: status === 'active' ? 'En curso' : undefined,
+      sessionId: readString(record, 'session_id'),
+    };
+  }
+
+  private toGroup(value: unknown): TeacherGroupView {
+    const record = toRecord(value);
+    const career = toRecord(record?.['career']);
+
+    return {
+      id: readId(record),
+      group: this.groupLabel(record),
+      career: readFirstString(career, ['short_name', 'name']),
+      subject: readString(record, 'subject'),
+      description: readString(record, 'description'),
+      students: readNumber(record, 'student_count', 0),
+    };
+  }
+
+  private toGroupStudent(value: unknown): TeacherStudentView {
+    const record = toRecord(value);
+    const group = toRecord(record?.['group']);
+    const attendance = readNumber(record, 'attendance_rate', 0);
+    const active = readBooleanLike(record, 'active');
+
+    return {
+      id: readId(record),
+      name: readFullName(record),
+      email: readString(record, 'email'),
+      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']),
+      group: this.groupLabel(group),
+      status: active ? 'Activo' : 'Inactivo',
+      statusTone: active ? 'present' : 'neutral',
+      attendance,
+      avatarUrl: readFirstString(record, ['photo_url', 'avatar_url']) || undefined,
+    };
+  }
+
+  private toAttendanceStudent(student: TeacherStudentView): TeacherAttendanceStudentView {
+    return {
+      id: student.id,
+      name: student.name,
+      enrollment: student.enrollment,
+      avatarUrl: student.avatarUrl ?? '/profile-avatar.svg',
+      status: 'absent',
+    };
+  }
+
+  private toIncident(value: unknown): TeacherIncidentView {
+    const record = toRecord(value);
+    const reporter = toRecord(record?.['reporter']);
+    const severity = readString(record, 'severity');
+    const type = readString(record, 'type');
+    const status = readString(record, 'status');
+
+    return {
+      id: readId(record),
+      type,
+      title: readString(record, 'title', type),
+      date: formatApiDate(readFirstString(record, ['created_at', 'date'])),
+      location: readString(record, 'location'),
+      reporter: readFullName(reporter),
+      priority: severity,
+      tone: this.severityTone(severity),
+      icon: this.incidentIcon(type),
+      status,
+      description: readString(record, 'description'),
+      evidenceUrl: readString(record, 'evidence_url'),
+    };
+  }
+
+  private toIncidentDetail(value: unknown): TeacherIncidentDetailView {
+    const base = this.toIncident(value);
+    const record = toRecord(value);
+    const students = Array.isArray(record?.['students']) ? record?.['students'] : [];
+    const history = Array.isArray(record?.['history']) ? record?.['history'] : [];
+
+    return {
+      ...base,
+      students: students.map((item) => this.toEmergencyStudent(item)),
+      history: history.map((item) => this.toTimelineItem(item)),
+    };
+  }
+
+  private toEmergencyStudent(value: unknown): TeacherEmergencyStudentView {
+    const record = toRecord(value);
+    const presentValue = record?.['present'];
+    const status = presentValue === true ? 'PRESENTE' : presentValue === false ? 'AUSENTE' : '';
+
+    return {
+      id: readId(record),
+      name: readFullName(record),
+      enrollment: readFirstString(record, ['control_number', 'enrollment', 'student_number']),
+      status,
+    };
+  }
+
+  private toTimelineItem(value: unknown): TeacherTimelineItemView {
+    const record = toRecord(value);
+    const performedBy = toRecord(record?.['performed_by']);
+    const action = readString(record, 'action');
+
+    return {
+      title: action,
+      description: readFullName(performedBy),
+      date: formatApiDate(readString(record, 'created_at')),
+    };
+  }
+
+  private toStudentProfile(value: unknown, fallbackId: string): TeacherStudentProfileView {
+    const record = toRecord(value);
+    const group = toRecord(record?.['group']);
+    const career = toRecord(group?.['career']) ?? toRecord(record?.['career']);
+    const tutors = Array.isArray(record?.['tutors']) ? record?.['tutors'] : [];
+    const tutor = toRecord(tutors[0]);
+    const name = readFullName(record);
+
+    return {
+      id: readId(record, fallbackId),
+      name,
+      fullName: name,
+      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']),
+      email: readString(record, 'email'),
+      group: this.groupLabel(group),
+      department: readFirstString(career, ['short_name', 'name']),
+      tutor: readFullName(tutor),
+      avatarUrl: readFirstString(record, ['photo_url', 'avatar_url'], '/profile-avatar.svg'),
+      attendance: readNumber(record, 'attendance_rate', 0),
+      justifications: '0',
+      emergencyContact: readFullName(tutor),
+      emergencyPhone: readString(tutor, 'phone'),
+    };
+  }
+
+  private toAttendanceHistory(value: unknown): TeacherAttendanceHistoryView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const schedule = toRecord(record?.['schedule']);
+    const rawStatus = readString(record, 'status');
+    const rawDate = readFirstString(record, ['date', 'registered_at', 'created_at']);
+
+    return {
+      id: readFirstString(record, ['attendance_id', 'id']),
+      date: formatApiDate(rawDate),
+      subject: readString(subject, 'name', readString(record, 'subject')),
+      time: formatApiTime(readFirstString(record, ['registered_at', 'created_at'])) || readString(schedule, 'start_time'),
+      status: this.attendanceStatusLabel(rawStatus),
+      statusTone: toneFromAttendanceStatus(rawStatus),
+    };
+  }
+
+  private toJustificationHistory(value: unknown): TeacherJustificationHistoryView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const status = readString(record, 'status');
+
+    return {
+      id: readId(record),
+      date: formatApiDate(readFirstString(record, ['created_at', 'submitted_at', 'date'])),
+      type: this.requestStatusLabel(status),
+      typeTone: toneFromRequestStatus(status),
+      subject: readString(subject, 'name', readString(record, 'subject')),
+      evidenceIcon: readString(record, 'evidence_url') ? 'fa-regular fa-file-lines' : 'fa-regular fa-file',
+    };
+  }
+
+  private classStatus(start: string, end: string, sessionOpen: boolean): TeacherClassView['status'] {
+    if (sessionOpen) {
+      return 'active';
+    }
+
+    const now = new Date();
+    const startDate = this.timeToday(start);
+    const endDate = this.timeToday(end);
+
+    if (startDate && endDate && now > endDate) {
+      return 'done';
+    }
+
+    return startDate && now >= startDate ? 'active' : 'next';
+  }
+
+  private timeToday(value: string): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    const [hours, minutes] = value.split(':').map((part) => Number(part));
+
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+      return null;
+    }
+
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date;
+  }
+
+  private sessionIdFromResponse(response: unknown): string {
+    const data = toRecord(unwrapData(response));
+    return readFirstString(data, ['session_id', 'id']);
+  }
+
+  private toApiAttendanceStatus(status: AttendanceMark): 'PRESENTE' | 'RETARDO' | 'FALTA' {
+    if (status === 'present') {
+      return 'PRESENTE';
+    }
+
+    if (status === 'late') {
+      return 'RETARDO';
+    }
+
+    return 'FALTA';
+  }
+
+  private attendanceRate(records: readonly TeacherAttendanceHistoryView[]): number {
+    if (!records.length) {
+      return 0;
+    }
+
+    const present = records.filter(
+      (record) => record.statusTone === 'present' || record.statusTone === 'justified',
+    ).length;
+
+    return Math.round((present / records.length) * 100);
+  }
+
+  private groupLabel(record: UnknownRecord | null | undefined): string {
+    const label = readString(record, 'label');
+
+    if (label) {
+      return label;
+    }
+
+    const grade = readString(record, 'grade');
+    const section = readString(record, 'section');
+    return [grade, section].filter(Boolean).join('-');
+  }
+
+  private severityTone(severity: string): StatusBadgeTone {
+    const normalized = severity.toUpperCase();
+
+    if (normalized.includes('CRIT') || normalized.includes('ALTA')) {
+      return 'danger';
+    }
+
+    if (normalized.includes('MEDIA')) {
+      return 'warning';
+    }
+
+    return 'neutral';
+  }
+
+  private incidentIcon(type: string): string {
+    const normalized = type.toUpperCase();
+
+    if (normalized.includes('FIRE') || normalized.includes('FUEGO')) {
+      return 'fa-solid fa-fire-flame-curved';
+    }
+
+    if (normalized.includes('GAS')) {
+      return 'fa-solid fa-fire-extinguisher';
+    }
+
+    if (normalized.includes('EARTH') || normalized.includes('TERREMOTO')) {
+      return 'fa-solid fa-wave-square';
+    }
+
+    return 'fa-solid fa-triangle-exclamation';
+  }
+
+  private attendanceStatusLabel(status: string): string {
+    const normalized = status.toUpperCase();
+
+    if (normalized.includes('PRESENTE')) {
+      return 'A tiempo';
+    }
+
+    if (normalized.includes('RETARDO')) {
+      return 'Retardo';
+    }
+
+    if (normalized.includes('JUSTIFIC')) {
+      return 'Justificado';
+    }
+
+    if (normalized.includes('FALTA')) {
+      return 'Inasistencia';
+    }
+
+    return status || 'Sin estado';
+  }
+
+  private requestStatusLabel(status: string): string {
+    const normalized = status.toUpperCase();
+
+    if (normalized.includes('ACEPT')) {
+      return 'Aprobado';
+    }
+
+    if (normalized.includes('RECHAZ')) {
+      return 'Rechazado';
+    }
+
+    if (normalized.includes('PROCES') || normalized.includes('CONTACT')) {
+      return 'En proceso';
+    }
+
+    if (normalized.includes('PEND')) {
+      return 'Pendiente';
+    }
+
+    return status || 'Sin estado';
+  }
+}
+
+function readBooleanLike(record: UnknownRecord | null | undefined, key: string): boolean {
+  const value = record?.[key];
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+
+  if (typeof value === 'string') {
+    return value === '1' || value.toLowerCase() === 'true';
+  }
+
+  return false;
+}
