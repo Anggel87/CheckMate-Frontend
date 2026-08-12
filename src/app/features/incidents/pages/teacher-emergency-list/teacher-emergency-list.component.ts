@@ -19,7 +19,7 @@ type EmergencyMark = 'present' | 'absent' | '';
       <header class="teacher-page__header">
         <div>
           <h1>Lista de alumnos emergencia</h1>
-          <p>{{ incident?.title || 'Incidente activo' }}</p>
+          <p>{{ incident()?.title || 'Incidente activo' }}</p>
         </div>
       </header>
 
@@ -30,7 +30,7 @@ type EmergencyMark = 'present' | 'absent' | '';
           </div>
 
           <div class="teacher-emergency-student-list">
-            @for (student of students; track student.id) {
+            @for (student of students(); track student.id) {
               <article
                 class="teacher-emergency-student"
                 [class.is-present]="marks()[student.id] === 'present'"
@@ -96,7 +96,7 @@ type EmergencyMark = 'present' | 'absent' | '';
       </div>
 
       <p class="teacher-empty-note" aria-live="polite">
-        Verificados: {{ checkedCount() }} de {{ students.length }}
+        Verificados: {{ checkedCount() }} de {{ students().length }}
       </p>
     </section>
   `,
@@ -112,16 +112,16 @@ export class TeacherEmergencyListComponent {
   protected readonly checkedCount = computed(
     () => Object.values(this.marks()).filter((mark) => mark !== '').length,
   );
-  protected incident: TeacherIncidentDetailView | null = null;
-  protected students: TeacherEmergencyStudentView[] = [];
+  protected readonly incident = signal<TeacherIncidentDetailView | null>(null);
+  protected readonly students = signal<TeacherEmergencyStudentView[]>([]);
 
   constructor() {
     this.teacherApi
       .getEmergencyIncident()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((incident) => {
-        this.incident = incident;
-        this.students = incident.students;
+        this.incident.set(incident);
+        this.students.set(incident.students);
         this.marks.set(
           Object.fromEntries(
             incident.students.map((student) => [
@@ -138,7 +138,7 @@ export class TeacherEmergencyListComponent {
   }
 
   protected async save(): Promise<void> {
-    if (!this.incident?.id) {
+    if (!this.incident()?.id) {
       this.toastService.error('Sin incidente activo', 'No hay un incidente activo para actualizar.');
       return;
     }
@@ -157,7 +157,7 @@ export class TeacherEmergencyListComponent {
 
     this.saving.set(true);
     this.teacherApi
-      .updateIncidentStudents(this.incident.id, this.marks())
+      .updateIncidentStudents(this.incident()!.id, this.marks())
       .pipe(
         finalize(() => this.saving.set(false)),
         takeUntilDestroyed(this.destroyRef),

@@ -1,7 +1,9 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import {
   StudentJustificationView,
@@ -11,7 +13,7 @@ import {
 @Component({
   selector: 'app-student-justifications',
   standalone: true,
-  imports: [RouterLink, EmptyStateComponent, StatusBadgeComponent],
+  imports: [RouterLink, EmptyStateComponent, LoadingSpinnerComponent, StatusBadgeComponent],
   template: `
     <section class="student-page">
       <header class="student-page__header student-page__header--action">
@@ -49,49 +51,53 @@ import {
         </div>
       </section>
 
-      <article class="student-card student-request-list-card">
-        @if (justifications.length === 0) {
-          <app-empty-state
-            icon="fa-regular fa-file-lines"
-            title="Sin justificantes"
-            description="Cuando envies una solicitud aparecera en este historial."
-          />
-        } @else {
-          <div class="student-request-list">
-            @for (item of justifications; track item.id) {
-              <a class="student-request-row" routerLink="/student/justifications">
-                <div>
-                  <app-status-badge [label]="item.status" [tone]="item.statusTone" />
-                  <h2>{{ item.title }}</h2>
-                  <p>{{ item.description }}</p>
-                </div>
+      @if (loading()) {
+        <app-loading-spinner label="Cargando justificantes..." [showLabel]="true" />
+      } @else {
+        <article class="student-card student-request-list-card">
+          @if (justifications().length === 0) {
+            <app-empty-state
+              icon="fa-regular fa-file-lines"
+              title="Sin justificantes"
+              description="Cuando envies una solicitud aparecera en este historial."
+            />
+          } @else {
+            <div class="student-request-list">
+              @for (item of justifications(); track item.id) {
+                <a class="student-request-row" routerLink="/student/justifications">
+                  <div>
+                    <app-status-badge [label]="item.status" [tone]="item.statusTone" />
+                    <h2>{{ item.title }}</h2>
+                    <p>{{ item.description }}</p>
+                  </div>
 
-                <aside>
-                  <time>{{ item.date }}</time>
-                  <span class="student-attachment-pill">
-                    <i class="fa-solid fa-paperclip" aria-hidden="true"></i>
-                    {{ item.attachments }} {{ item.attachments === 1 ? 'adjunto' : 'adjuntos' }}
-                  </span>
-                  <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-                </aside>
-              </a>
-            }
+                  <aside>
+                    <time>{{ item.date }}</time>
+                    <span class="student-attachment-pill">
+                      <i class="fa-solid fa-paperclip" aria-hidden="true"></i>
+                      {{ item.attachments }} {{ item.attachments === 1 ? 'adjunto' : 'adjuntos' }}
+                    </span>
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                  </aside>
+                </a>
+              }
+            </div>
+          }
+        </article>
+
+        <footer class="student-table-footer">
+          <span>Mostrando {{ justifications().length }} registros</span>
+          <div class="student-pagination" aria-label="Paginacion de justificantes">
+            <button type="button" disabled aria-label="Pagina anterior">
+              <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="is-active">1</button>
+            <button type="button" disabled aria-label="Pagina siguiente">
+              <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </button>
           </div>
-        }
-      </article>
-
-      <footer class="student-table-footer">
-        <span>Mostrando {{ justifications.length }} registros</span>
-        <div class="student-pagination" aria-label="Paginacion de justificantes">
-          <button type="button" disabled aria-label="Pagina anterior">
-            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-          </button>
-          <button type="button" class="is-active">1</button>
-          <button type="button" disabled aria-label="Pagina siguiente">
-            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-          </button>
-        </div>
-      </footer>
+        </footer>
+      }
     </section>
   `,
 })
@@ -101,14 +107,18 @@ export class StudentJustificationsComponent {
 
   protected readonly activeTab = signal('Todos');
   protected readonly tabs = ['Todos', 'Pendientes', 'Aprobados', 'Rechazados'];
-  protected justifications: StudentJustificationView[] = [];
+  protected readonly loading = signal(true);
+  protected readonly justifications = signal<StudentJustificationView[]>([]);
 
   constructor() {
     this.studentApi
       .getJustifications()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        finalize(() => this.loading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe((justifications) => {
-        this.justifications = justifications;
+        this.justifications.set(justifications);
       });
   }
 }

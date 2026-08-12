@@ -1,6 +1,8 @@
-import { Component, DestroyRef, inject } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import {
   TeacherPortalApiService,
@@ -10,7 +12,7 @@ import {
 @Component({
   selector: 'app-teacher-group-students',
   standalone: true,
-  imports: [RouterLink, StatusBadgeComponent],
+  imports: [RouterLink, LoadingSpinnerComponent, StatusBadgeComponent],
   template: `
     <section class="teacher-page">
       <header class="teacher-page__header teacher-page__header--filters">
@@ -31,55 +33,59 @@ import {
         </div>
       </header>
 
-      <section class="teacher-table-card" aria-label="Alumnos del grupo">
-        <div class="teacher-table teacher-students-table">
-          <div class="teacher-table__row teacher-table__row--header">
-            <span>Alumno</span>
-            <span>Matricula</span>
-            <span>Asistencia</span>
-            <span>Estado</span>
-            <span>Accion</span>
-          </div>
+      @if (loading()) {
+        <app-loading-spinner label="Cargando alumnos..." [showLabel]="true" />
+      } @else {
+        <section class="teacher-table-card" aria-label="Alumnos del grupo">
+          <div class="teacher-table teacher-students-table">
+            <div class="teacher-table__row teacher-table__row--header">
+              <span>Alumno</span>
+              <span>Matricula</span>
+              <span>Asistencia</span>
+              <span>Estado</span>
+              <span>Accion</span>
+            </div>
 
-          @for (student of students; track student.id) {
-            <div class="teacher-table__row">
-              <div class="teacher-person-cell">
-                @if (student.avatarUrl) {
-                  <img [src]="student.avatarUrl" [alt]="'Foto de ' + student.name" />
-                } @else {
-                  <span class="avatar">{{ initials(student.name) }}</span>
-                }
-                <div>
-                  <strong>{{ student.name }}</strong>
-                  <small>{{ student.email }}</small>
+            @for (student of students(); track student.id) {
+              <div class="teacher-table__row">
+                <div class="teacher-person-cell">
+                  @if (student.avatarUrl) {
+                    <img [src]="student.avatarUrl" [alt]="'Foto de ' + student.name" />
+                  } @else {
+                    <span class="avatar">{{ initials(student.name) }}</span>
+                  }
+                  <div>
+                    <strong>{{ student.name }}</strong>
+                    <small>{{ student.email }}</small>
+                  </div>
                 </div>
-              </div>
-              <span>{{ student.enrollment }}</span>
-              <div class="teacher-attendance-meter">
-                <div class="teacher-progress" aria-hidden="true">
-                  <span
-                    [class.is-warning]="student.attendance < 85 && student.attendance >= 70"
-                    [class.is-danger]="student.attendance < 70"
-                    [style.width.%]="student.attendance"
-                  ></span>
+                <span>{{ student.enrollment }}</span>
+                <div class="teacher-attendance-meter">
+                  <div class="teacher-progress" aria-hidden="true">
+                    <span
+                      [class.is-warning]="student.attendance < 85 && student.attendance >= 70"
+                      [class.is-danger]="student.attendance < 70"
+                      [style.width.%]="student.attendance"
+                    ></span>
+                  </div>
+                  <strong>{{ student.attendance }}%</strong>
                 </div>
-                <strong>{{ student.attendance }}%</strong>
+                <app-status-badge [label]="student.status" [tone]="student.statusTone" />
+                <a
+                  class="btn-checkmate btn-checkmate-secondary"
+                  [routerLink]="['/teacher/students', student.id]"
+                >
+                  Ver Perfil
+                </a>
               </div>
-              <app-status-badge [label]="student.status" [tone]="student.statusTone" />
-              <a
-                class="btn-checkmate btn-checkmate-secondary"
-                [routerLink]="['/teacher/students', student.id]"
-              >
-                Ver Perfil
-              </a>
-            </div>
-          } @empty {
-            <div class="teacher-table__row">
-              <span>No hay alumnos activos para este grupo.</span>
-            </div>
-          }
-        </div>
-      </section>
+            } @empty {
+              <div class="teacher-table__row">
+                <span>No hay alumnos activos para este grupo.</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
     </section>
   `,
 })
@@ -88,14 +94,18 @@ export class TeacherGroupStudentsComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly teacherApi = inject(TeacherPortalApiService);
 
-  protected students: TeacherStudentView[] = [];
+  protected readonly loading = signal(true);
+  protected readonly students = signal<TeacherStudentView[]>([]);
 
   constructor() {
     this.teacherApi
       .getGroupStudents(this.route.snapshot.paramMap.get('groupId') ?? '')
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        finalize(() => this.loading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe((students) => {
-        this.students = students;
+        this.students.set(students);
       });
   }
 

@@ -19,14 +19,14 @@ import { ToastService } from '../../../../shared/feedback/services/toast.service
     <section class="teacher-page teacher-attendance-page">
       <header class="teacher-attendance-header">
         <div>
-          <h1>Pasar Lista: {{ classItem?.subject || 'Clase' }}</h1>
-          <p>{{ classItem?.group || 'Grupo' }} - {{ classItem?.start }} a {{ classItem?.end }}</p>
+          <h1>Pasar Lista: {{ classItem()?.subject || 'Clase' }}</h1>
+          <p>{{ classItem()?.group || 'Grupo' }} - {{ classItem()?.start }} a {{ classItem()?.end }}</p>
         </div>
 
         <div class="teacher-attendance-stats" aria-label="Resumen de asistencia">
           <article class="teacher-mini-stat">
             <span>Total alumnos</span>
-            <strong>{{ students.length }}</strong>
+            <strong>{{ students().length }}</strong>
           </article>
           <article class="teacher-mini-stat teacher-mini-stat--success">
             <span>Asistentes</span>
@@ -68,7 +68,7 @@ import { ToastService } from '../../../../shared/feedback/services/toast.service
       </section>
 
       <section class="teacher-attendance-grid" aria-label="Alumnos">
-        @for (student of students; track student.id) {
+        @for (student of students(); track student.id) {
           <article
             class="teacher-attendance-card"
             [class.is-selected]="isSelected(student.id, 'present')"
@@ -135,16 +135,16 @@ export class TeacherTakeAttendanceComponent {
 
   protected readonly saving = signal(false);
   protected readonly marks = signal<Record<string, AttendanceMark>>({});
-  protected students: TeacherAttendanceStudentView[] = [];
-  protected classItem: TeacherClassView | null = null;
+  protected readonly students = signal<TeacherAttendanceStudentView[]>([]);
+  protected readonly classItem = signal<TeacherClassView | null>(null);
 
   constructor() {
     this.teacherApi
       .getAttendanceContext(this.route.snapshot.paramMap.get('classId'))
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((context) => {
-        this.classItem = context.classItem;
-        this.students = context.students;
+        this.classItem.set(context.classItem);
+        this.students.set(context.students);
         this.marks.set(
           Object.fromEntries(context.students.map((student) => [student.id, student.status])) as Record<
             string,
@@ -155,7 +155,7 @@ export class TeacherTakeAttendanceComponent {
   }
 
   protected presentCount(): number {
-    return this.students.filter(
+    return this.students().filter(
       (student) => !student.disabled && this.marks()[student.id] === 'present',
     ).length;
   }
@@ -163,7 +163,7 @@ export class TeacherTakeAttendanceComponent {
   protected markAll(status: AttendanceMark): void {
     this.marks.update((current) => {
       const next = { ...current };
-      this.students.forEach((student) => {
+      this.students().forEach((student) => {
         if (!student.disabled) {
           next[student.id] = status;
         }
@@ -181,7 +181,7 @@ export class TeacherTakeAttendanceComponent {
   }
 
   protected async save(): Promise<void> {
-    const scheduleId = this.classItem?.scheduleId;
+    const scheduleId = this.classItem()?.scheduleId;
 
     if (!scheduleId) {
       this.toastService.error('Horario no encontrado', 'Abre el pase de lista desde una clase real.');
@@ -202,7 +202,7 @@ export class TeacherTakeAttendanceComponent {
 
     this.saving.set(true);
     this.teacherApi
-      .saveAttendance(scheduleId, this.marks(), this.classItem?.sessionId)
+      .saveAttendance(scheduleId, this.marks(), this.classItem()?.sessionId)
       .pipe(
         finalize(() => this.saving.set(false)),
         takeUntilDestroyed(this.destroyRef),

@@ -554,7 +554,11 @@ export class StudentPortalApiService {
       const parsed = new Date(record.rawDate);
 
       if (parsed.getFullYear() === year && parsed.getMonth() === month) {
-        statusByDay.set(parsed.getDate(), this.calendarTone(record.statusTone));
+        const tone = this.calendarTone(record.statusTone);
+
+        if (tone) {
+          statusByDay.set(parsed.getDate(), tone);
+        }
       }
     });
 

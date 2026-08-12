@@ -63,7 +63,7 @@ import {
             description="Intenta nuevamente para consultar tu historial."
             (retry)="retry()"
           />
-        } @else if (records.length === 0) {
+        } @else if (records().length === 0) {
           <app-empty-state
             icon="fa-regular fa-calendar-check"
             title="Sin asistencias registradas"
@@ -82,7 +82,7 @@ import {
                 </tr>
               </thead>
               <tbody>
-                @for (record of records; track record.id) {
+                @for (record of records(); track record.id) {
                   <tr>
                     <td>{{ record.date }}</td>
                     <td>{{ record.subject }}</td>
@@ -107,7 +107,7 @@ import {
           </div>
 
           <footer class="student-table-footer">
-            <span>Mostrando {{ records.length }} registros</span>
+            <span>Mostrando {{ records().length }} registros</span>
             <div class="student-pagination" aria-label="Paginacion">
               <button type="button" disabled aria-label="Pagina anterior">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -131,7 +131,7 @@ export class StudentAttendanceListComponent {
 
   protected readonly loading = signal(false);
   protected readonly error = signal(false);
-  protected records: StudentAttendanceRecordView[] = [];
+  protected readonly records = signal<StudentAttendanceRecordView[]>([]);
 
   constructor() {
     this.loadRecords();
@@ -151,11 +151,11 @@ export class StudentAttendanceListComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (records) => {
-          this.records = records;
+          this.records.set(records);
           this.loading.set(false);
         },
         error: () => {
-          this.records = [];
+          this.records.set([]);
           this.loading.set(false);
           this.error.set(true);
         },

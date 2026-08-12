@@ -73,7 +73,7 @@ export class DashboardDataService {
 
   private managementDashboard(): Observable<DashboardView> {
     return this.managementData.getSnapshot().pipe(
-      map((snapshot) => {
+      map((snapshot): DashboardView => {
         const studentsTotal = snapshot.charts.totalStudents || snapshot.students.length;
         const pendingJustifications = snapshot.justifications.filter(
           (item) => item.status.tone === 'warning',

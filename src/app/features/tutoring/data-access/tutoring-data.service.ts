@@ -185,6 +185,26 @@ export class TutoringDataService {
       );
   }
 
+  createJustification(
+    studentId: string,
+    attendanceId: string,
+    reason: string,
+    evidence: File | null,
+  ): Observable<boolean> {
+    const formData = new FormData();
+    formData.set('attendance_id', attendanceId);
+    formData.set('reason', reason);
+
+    if (evidence) {
+      formData.set('evidence', evidence);
+    }
+
+    return this.api.post<unknown>(`/tutor/students/${studentId}/justifications`, formData).pipe(
+      tap(() => this.loadStudentDetails(this.students())),
+      map(() => true),
+    );
+  }
+
   updateClaimStatus(id: string, status: TutorRequestStatus, comment = ''): Observable<boolean> {
     if (!id) {
       return of(false);

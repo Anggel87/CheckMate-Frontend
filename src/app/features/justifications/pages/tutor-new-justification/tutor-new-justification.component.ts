@@ -1,6 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
@@ -105,9 +107,14 @@ const JUSTIFICATION_TYPES = [
             <span>Opcional pero recomendado</span>
           </div>
           <label class="student-file-drop" for="tutor-justification-file">
-            <input id="tutor-justification-file" type="file" accept=".pdf,.jpg,.jpeg,.png" />
+            <input
+              id="tutor-justification-file"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              (change)="selectFile($event)"
+            />
             <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-            <strong>Haz clic para subir o arrastra y suelta</strong>
+            <strong>{{ evidenceName() || 'Haz clic para subir o arrastra y suelta' }}</strong>
             <small>PNG, JPG, PDF (Max. 5MB)</small>
           </label>
         </section>
@@ -129,6 +136,7 @@ const JUSTIFICATION_TYPES = [
   `,
 })
 export class TutorNewJustificationComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -138,6 +146,8 @@ export class TutorNewJustificationComponent {
 
   protected readonly students = this.tutoringData.students;
   protected readonly saving = signal(false);
+  protected readonly evidenceName = signal('');
+  private evidence: File | null = null;
   protected readonly justificationTypes = JUSTIFICATION_TYPES;
   protected readonly form = this.formBuilder.nonNullable.group({
     studentId: [this.route.snapshot.queryParamMap.get('student') ?? '', Validators.required],
@@ -168,6 +178,12 @@ export class TutorNewJustificationComponent {
     return controlErrorMessage(this.form.controls[controlName], label);
   }
 
+  protected selectFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.evidence = input.files?.[0] ?? null;
+    this.evidenceName.set(this.evidence?.name ?? '');
+  }
+
   protected async submit(): Promise<void> {
     markFormGroupTouched(this.form);
 
@@ -177,8 +193,8 @@ export class TutorNewJustificationComponent {
 
     const confirmed = await this.dialogService.confirm({
       title: 'Registrar justificante?',
-      message: 'La API actual no documenta creacion de justificantes desde tutor. Solo permite revisar justificantes existentes.',
-      confirmText: 'Entendido',
+      message: 'El justificante quedara pendiente de revision por el director de carrera.',
+      confirmText: 'Enviar',
       cancelText: 'Cancelar',
       variant: 'default',
       icon: 'fa-regular fa-file-lines',
@@ -188,9 +204,27 @@ export class TutorNewJustificationComponent {
       return;
     }
 
-    this.toastService.error(
-      'Endpoint no disponible',
-      'Crea el justificante desde el portal del alumno y revisalo aqui cuando aparezca en la API.',
-    );
+    const value = this.form.getRawValue();
+    const reason = `${value.type}. ${value.reason}`;
+
+    this.saving.set(true);
+    this.tutoringData
+      .createJustification(value.studentId, value.attendanceRecordId, reason, this.evidence)
+      .pipe(
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => {
+          this.toastService.success('Justificante enviado', 'Quedo registrado para revision.');
+          void this.router.navigateByUrl('/tutor/justifications');
+        },
+        error: () => {
+          this.toastService.error(
+            'No se pudo enviar el justificante',
+            'Verifica el alumno, la ausencia seleccionada y vuelve a intentar.',
+          );
+        },
+      });
   }
 }

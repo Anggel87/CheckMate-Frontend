@@ -1,15 +1,17 @@
 import { Injectable, inject } from '@angular/core';
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { Observable, catchError, forkJoin, from, map, of, switchMap, throwError } from 'rxjs';
-import { environment } from '../../../../environments/environment';
+import { Observable, catchError, forkJoin, map, of, switchMap } from 'rxjs';
 import { AuthService } from '../../../core/authentication/auth.service';
+import { CheckmateApiService } from '../../../core/api/checkmate-api.service';
+import { unwrapData } from '../../../core/api/api-adapter';
 import { UserRole } from '../../../core/enums/user-role.enum';
 import {
+  DeviceCreatePayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
   ManagementAuditLog,
   ManagementCharts,
   ManagementClaim,
+  ManagementClassroom,
   ManagementDevice,
   ManagementGroup,
   ManagementIncident,
@@ -29,10 +31,7 @@ type UnknownRecord = Record<string, unknown>;
 })
 export class ManagementDataService {
   private readonly authService = inject(AuthService);
-  private readonly api: AxiosInstance = axios.create({
-    baseURL: environment.checkmateApiUrl,
-    timeout: 12000,
-  });
+  private readonly checkmateApi = inject(CheckmateApiService);
 
   getSnapshot(): Observable<ManagementSnapshot> {
     return forkJoin({
@@ -51,7 +50,7 @@ export class ManagementDataService {
   }
 
   getGroups(): Observable<ManagementGroup[]> {
-    return this.getCollection(`${this.scopeBase()}/groups`, (item, index) => this.toGroup(item, index));
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/groups`, (item, index) => this.toGroup(item, index));
   }
 
   getStudents(): Observable<ManagementStudent[]> {
@@ -60,7 +59,7 @@ export class ManagementDataService {
         map((groups) => groups[0]?.id),
         switchMap((groupId) =>
           groupId
-            ? this.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
+            ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
                 this.toStudent(item, index),
               )
             : of([]),
@@ -69,7 +68,7 @@ export class ManagementDataService {
     }
 
     if (this.currentRole() === UserRole.ADMIN) {
-      return this.getCollection(`${this.adminBase()}/students`, (item, index) =>
+      return this.checkmateApi.getCollection(`${this.adminBase()}/students`, (item, index) =>
         this.toStudent(item, index),
       );
     }
@@ -78,14 +77,14 @@ export class ManagementDataService {
   }
 
   getTeachers(): Observable<ManagementTeacher[]> {
-    return this.getCollection(`${this.scopeBase()}/teachers`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/teachers`, (item, index) =>
       this.toTeacher(item, index),
     );
   }
 
   getSubjects(): Observable<ManagementSubject[]> {
     if (this.currentRole() === UserRole.ADMIN) {
-      return this.getCollection(`${this.adminBase()}/subjects`, (item, index) =>
+      return this.checkmateApi.getCollection(`${this.adminBase()}/subjects`, (item, index) =>
         this.toSubject(item, index),
       );
     }
@@ -103,7 +102,7 @@ export class ManagementDataService {
         map((groups) => groups[0]?.id),
         switchMap((groupId) =>
           groupId
-            ? this.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
+            ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
                 this.toSchedule(item, index),
               )
             : of([]),
@@ -120,7 +119,7 @@ export class ManagementDataService {
         map((students) => students[0]?.id),
         switchMap((studentId) =>
           studentId
-            ? this.getCollection(`${this.directorBase()}/students/${studentId}/justifications`, (item, index) =>
+            ? this.checkmateApi.getCollection(`${this.directorBase()}/students/${studentId}/justifications`, (item, index) =>
                 this.toJustification(item, index),
               )
             : of([]),
@@ -132,8 +131,18 @@ export class ManagementDataService {
   }
 
   getDevices(): Observable<ManagementDevice[]> {
-    return this.getCollection(`${this.scopeBase()}/devices`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/devices`, (item, index) =>
       this.toDevice(item, index),
+    );
+  }
+
+  getClassrooms(): Observable<ManagementClassroom[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/classrooms`, (item, index) =>
+      this.toClassroom(item, index),
     );
   }
 
@@ -142,20 +151,20 @@ export class ManagementDataService {
       return of([]);
     }
 
-    return this.getCollection(`${this.directorBase()}/incidents`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.directorBase()}/incidents`, (item, index) =>
       this.toIncident(item, index),
     );
   }
 
   getClaims(): Observable<ManagementClaim[]> {
     if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
-      return this.getCollection(`${this.directorBase()}/claims`, (item, index) =>
+      return this.checkmateApi.getCollection(`${this.directorBase()}/claims`, (item, index) =>
         this.toClaim(item, index),
       );
     }
 
     if (this.currentRole() === UserRole.TUTOR_TEACHER) {
-      return this.getCollection(`${this.tutorBase()}/claims`, (item, index) =>
+      return this.checkmateApi.getCollection(`${this.tutorBase()}/claims`, (item, index) =>
         this.toClaim(item, index),
       );
     }
@@ -168,7 +177,7 @@ export class ManagementDataService {
       return of([]);
     }
 
-    return this.getCollection(`${this.directorBase()}/logs/${entity}`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.directorBase()}/logs/${entity}`, (item, index) =>
       this.toLog(item, index, entity),
     );
   }
@@ -179,16 +188,16 @@ export class ManagementDataService {
     }
 
     return forkJoin({
-      general: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/general` }).pipe(
+      general: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/general`).pipe(
         catchError(() => of(null)),
       ),
-      incidents: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/incidents` }).pipe(
+      incidents: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/incidents`).pipe(
         catchError(() => of(null)),
       ),
-      absences: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/absences` }).pipe(
+      absences: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/absences`).pipe(
         catchError(() => of(null)),
       ),
-      justifications: this.request<unknown>({ method: 'GET', url: `${this.directorBase()}/charts/justifications` }).pipe(
+      justifications: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/justifications`).pipe(
         catchError(() => of(null)),
       ),
     }).pipe(map((response) => this.toCharts(response, EMPTY_MANAGEMENT_SNAPSHOT.charts)));
@@ -208,129 +217,86 @@ export class ManagementDataService {
       formData.set('evidence', payload.evidence);
     }
 
-    return this.request<unknown>({ method: 'POST', url: `${this.directorBase()}/incidents`, data: formData }).pipe(
+    return this.checkmateApi.post<unknown>(`${this.directorBase()}/incidents`, formData).pipe(
       map(() => true),
       catchError(() => of(false)),
     );
   }
 
   closeIncident(incidentId: string, resolution: string): Observable<boolean> {
-    return this.request<unknown>({
-      method: 'POST',
-      url: `${this.directorBase()}/incidents/${incidentId}/close`,
-      data: { resolution },
-    }).pipe(
-      map(() => true),
-      catchError(() => of(false)),
-    );
+    return this.checkmateApi
+      .post<unknown>(`${this.directorBase()}/incidents/${incidentId}/close`, { resolution })
+      .pipe(
+        map(() => true),
+        catchError(() => of(false)),
+      );
   }
 
   updateIncidentStudents(incident: ManagementIncident, notes: string): Observable<boolean> {
-    return this.request<unknown>({
-      method: 'PATCH',
-      url: `${this.directorBase()}/incidents/${incident.id}/students`,
-      data: {
+    return this.checkmateApi
+      .patch<unknown>(`${this.directorBase()}/incidents/${incident.id}/students`, {
         students: incident.roster.map((item) => ({
           student_id: item.studentId,
           status: item.status,
           notes,
         })),
-      },
-    }).pipe(
-      map(() => true),
-      catchError(() => of(false)),
-    );
+      })
+      .pipe(
+        map(() => true),
+        catchError(() => of(false)),
+      );
   }
 
   updateClaimAction(claimId: string, action: string, comment: string): Observable<boolean> {
     const base = this.currentRole() === UserRole.TUTOR_TEACHER ? this.tutorBase() : this.directorBase();
-    return this.request<unknown>({
-      method: 'PATCH',
-      url: `${base}/claims/${claimId}/action`,
-      data: { action, comment },
-    }).pipe(
+    return this.checkmateApi.patch<unknown>(`${base}/claims/${claimId}/action`, { action, comment }).pipe(
       map(() => true),
       catchError(() => of(false)),
     );
   }
 
   pingDevice(deviceId: string): Observable<boolean> {
-    return this.request<unknown>({ method: 'GET', url: `${this.scopeBase()}/devices/${deviceId}/ping` }).pipe(
+    return this.checkmateApi.get<unknown>(`${this.scopeBase()}/devices/${deviceId}/ping`).pipe(
       map(() => true),
       catchError(() => of(false)),
     );
   }
 
-  updateDevice(deviceId: string, payload: { ipAddress: string; isActive: boolean }): Observable<boolean> {
+  createDevice(payload: DeviceCreatePayload): Observable<boolean> {
     if (this.currentRole() !== UserRole.ADMIN) {
       return of(false);
     }
 
-    return this.request<unknown>({
-      method: 'PUT',
-      url: `${this.adminBase()}/devices/${deviceId}`,
-      data: {
+    return this.checkmateApi
+      .post<unknown>(`${this.adminBase()}/devices`, {
+        mac_address: payload.macAddress,
+        ip: payload.ipAddress || null,
+        classroom_id: payload.classroomId,
+      })
+      .pipe(
+        map(() => true),
+        catchError(() => of(false)),
+      );
+  }
+
+  updateDevice(
+    deviceId: string,
+    payload: { ipAddress: string; isActive: boolean; classroomId?: string },
+  ): Observable<boolean> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of(false);
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/devices/${deviceId}`, {
         ip: payload.ipAddress,
         is_active: payload.isActive,
-      },
-    }).pipe(
-      map(() => true),
-      catchError(() => of(false)),
-    );
-  }
-
-  private getCollection<T>(
-    url: string,
-    adapter: (item: unknown, index: number) => T,
-    params?: UnknownRecord,
-  ): Observable<T[]> {
-    return this.request<unknown>({ method: 'GET', url, params }).pipe(
-      map((response) => this.extractCollection(response).map(adapter)),
-    );
-  }
-
-  private request<T>(config: AxiosRequestConfig): Observable<T> {
-    return from(
-      this.api.request<T>({
-        ...config,
-        headers: {
-          ...config.headers,
-          ...this.authHeaders(),
-        },
-      }),
-    ).pipe(
-      map((response) => response.data),
-      catchError((error: unknown) => throwError(() => error)),
-    );
-  }
-
-  private authHeaders(): Record<string, string> {
-    const user = this.authService.currentUser();
-
-    if (!user?.token) {
-      return {};
-    }
-
-    return {
-      Authorization: `${user.tokenType ?? 'Bearer'} ${user.token}`,
-    };
-  }
-
-  private extractCollection(response: unknown): unknown[] {
-    const data = this.unwrapData(response);
-
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    const record = toRecord(data);
-    const nestedData = record ? record['data'] : null;
-    return Array.isArray(nestedData) ? nestedData : [];
-  }
-
-  private unwrapData(response: unknown): unknown {
-    const record = toRecord(response);
-    return record && 'data' in record ? record['data'] : response;
+        ...(payload.classroomId ? { classroom_id: payload.classroomId } : {}),
+      })
+      .pipe(
+        map(() => true),
+        catchError(() => of(false)),
+      );
   }
 
   private scopeBase(): string {
@@ -338,15 +304,15 @@ export class ManagementDataService {
   }
 
   private adminBase(): string {
-    return `${environment.checkmateApiUrl}/administrador`;
+    return '/administrador';
   }
 
   private directorBase(): string {
-    return `${environment.checkmateApiUrl}/director-carrera`;
+    return '/director-carrera';
   }
 
   private tutorBase(): string {
-    return `${environment.checkmateApiUrl}/tutor`;
+    return '/tutor';
   }
 
   private currentRole(): UserRole | undefined {
@@ -492,9 +458,21 @@ export class ManagementDataService {
       macAddress: readString(record, 'mac_address', fallback.macAddress),
       ipAddress: readString(record, 'ip', fallback.ipAddress),
       classroom: readString(classroom, 'name', fallback.classroom),
+      classroomId: readString(record, 'classroom_id', fallback.classroomId),
+      building: readString(classroom, 'building', fallback.building),
       status: readBoolean(record, 'is_active', true)
         ? { label: 'Online', tone: 'success' }
         : { label: 'Offline', tone: 'danger' },
+    };
+  }
+
+  private toClassroom(value: unknown, index: number): ManagementClassroom {
+    const record = toRecord(value);
+
+    return {
+      id: readId(record, String(index + 1)),
+      name: readString(record, 'name', 'Salon'),
+      building: readString(record, 'building', ''),
     };
   }
 
@@ -566,10 +544,10 @@ export class ManagementDataService {
     },
     fallback: ManagementCharts,
   ): ManagementCharts {
-    const general = toRecord(this.unwrapData(response.general));
-    const incidents = toRecord(this.unwrapData(response.incidents));
-    const absences = toRecord(this.unwrapData(response.absences));
-    const justifications = toRecord(toRecord(this.unwrapData(response.justifications))?.['by_status']);
+    const general = toRecord(unwrapData(response.general));
+    const incidents = toRecord(unwrapData(response.incidents));
+    const absences = toRecord(unwrapData(response.absences));
+    const justifications = toRecord(toRecord(unwrapData(response.justifications))?.['by_status']);
 
     return {
       totalStudents: readNumber(general, 'total_students', fallback.totalStudents),
@@ -762,6 +740,7 @@ function emptyDevice(index: number): ManagementDevice {
     macAddress: '',
     ipAddress: '',
     classroom: '',
+    classroomId: '',
     building: '',
     tutor: '',
     status: neutralStatus(),

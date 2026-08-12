@@ -12,6 +12,7 @@ export type ManagementView =
   | 'attendance'
   | 'justifications'
   | 'devices'
+  | 'device-create'
   | 'device-edit'
   | 'incidents'
   | 'incident-new'
@@ -116,10 +117,23 @@ export interface ManagementDevice {
   macAddress: string;
   ipAddress: string;
   classroom: string;
+  classroomId: string;
   building: string;
   tutor: string;
   status: ManagementStatus;
   lastSync: string;
+}
+
+export interface ManagementClassroom {
+  id: string;
+  name: string;
+  building: string;
+}
+
+export interface DeviceCreatePayload {
+  macAddress: string;
+  ipAddress: string;
+  classroomId: string;
 }
 
 export interface ManagementIncidentRosterItem {

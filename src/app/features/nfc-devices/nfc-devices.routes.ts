@@ -14,7 +14,7 @@ export const NFC_DEVICES_ROUTES: Routes = [
   {
     path: 'new',
     loadComponent: loadManagementWorkspace,
-    data: { managementView: 'device-edit', topbarTitle: 'Nuevo dispositivo' },
+    data: { managementView: 'device-create', topbarTitle: 'Nuevo dispositivo' },
   },
   {
     path: ':deviceId/edit',

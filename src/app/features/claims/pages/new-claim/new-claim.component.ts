@@ -47,7 +47,7 @@ type StudentClaimControl = 'subjectId' | 'reason' | 'description';
               [attr.aria-describedby]="'claim-subject-error'"
             >
               <option value="">Selecciona la materia a reclamar</option>
-              @for (subject of subjects; track subject.id) {
+              @for (subject of subjects(); track subject.id) {
                 <option [value]="subject.id">{{ subject.name }} - {{ subject.teacher }}</option>
               }
             </select>
@@ -135,7 +135,7 @@ export class NewClaimComponent {
 
   protected readonly saving = signal(false);
   protected readonly evidenceName = signal('');
-  protected subjects: StudentCourseView[] = [];
+  protected readonly subjects = signal<StudentCourseView[]>([]);
   private evidence: File | null = null;
   protected readonly form = this.formBuilder.nonNullable.group({
     subjectId: ['', Validators.required],
@@ -148,7 +148,7 @@ export class NewClaimComponent {
       .getSubjects()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((subjects) => {
-        this.subjects = subjects;
+        this.subjects.set(subjects);
       });
   }
 

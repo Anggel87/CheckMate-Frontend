@@ -18,6 +18,7 @@ import {
   IncidentCreatePayload,
   ManagementAuditLog,
   ManagementClaim,
+  ManagementClassroom,
   ManagementDevice,
   ManagementGroup,
   ManagementIncident,
@@ -450,6 +451,47 @@ import {
             </div>
           }
 
+          @case ('device-create') {
+            <form class="checkmate-card management-form" [formGroup]="createDeviceForm" (ngSubmit)="createDevice()">
+              <div class="management-form__grid">
+                <label class="checkmate-form-field">
+                  <span class="checkmate-label">MAC address</span>
+                  <input
+                    class="checkmate-input"
+                    type="text"
+                    formControlName="macAddress"
+                    placeholder="00:1A:2B:3C:4D:5E"
+                  />
+                  @if (createDeviceForm.controls.macAddress.touched && createDeviceForm.controls.macAddress.invalid) {
+                    <p class="checkmate-field-error">Formato de MAC invalido. Usa AA:BB:CC:DD:EE:FF.</p>
+                  }
+                </label>
+                <label class="checkmate-form-field">
+                  <span class="checkmate-label">IP (opcional)</span>
+                  <input class="checkmate-input" type="text" formControlName="ipAddress" />
+                </label>
+                <label class="checkmate-form-field management-form__full">
+                  <span class="checkmate-label">Salon</span>
+                  <select class="checkmate-select" formControlName="classroomId">
+                    <option value="" disabled>Selecciona un salon</option>
+                    @for (classroom of classrooms(); track classroom.id) {
+                      <option [value]="classroom.id">{{ classroom.name }} - {{ classroom.building }}</option>
+                    }
+                  </select>
+                  @if (classrooms().length === 0) {
+                    <p class="checkmate-field-error">No hay salones disponibles desde la API.</p>
+                  }
+                </label>
+              </div>
+              <footer class="management-form__footer">
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/nfc-devices'">Cancelar</a>
+                <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+                  Crear dispositivo
+                </button>
+              </footer>
+            </form>
+          }
+
           @case ('device-edit') {
             @if (selectedDevice(); as device) {
               <form class="checkmate-card management-form" [formGroup]="deviceForm" (ngSubmit)="saveDevice(device)">
@@ -462,17 +504,13 @@ import {
                     <span class="checkmate-label">IP</span>
                     <input class="checkmate-input" type="text" formControlName="ipAddress" />
                   </label>
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Salon</span>
-                    <input class="checkmate-input" type="text" formControlName="classroom" />
-                  </label>
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Edificio</span>
-                    <input class="checkmate-input" type="text" formControlName="building" />
-                  </label>
                   <label class="checkmate-form-field management-form__full">
-                    <span class="checkmate-label">Tutor</span>
-                    <input class="checkmate-input" type="text" formControlName="tutor" />
+                    <span class="checkmate-label">Salon</span>
+                    <select class="checkmate-select" formControlName="classroomId">
+                      @for (classroom of classrooms(); track classroom.id) {
+                        <option [value]="classroom.id">{{ classroom.name }} - {{ classroom.building }}</option>
+                      }
+                    </select>
                   </label>
                 </div>
                 <aside class="management-form__aside">
@@ -489,6 +527,13 @@ import {
                   }
                 </footer>
               </form>
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro el dispositivo solicitado.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/nfc-devices'">
+                  Volver a dispositivos
+                </a>
+              </div>
             }
           }
 
@@ -926,6 +971,7 @@ export class ManagementWorkspaceComponent implements OnInit {
 
   protected readonly view = signal<ManagementView>('students');
   protected readonly snapshot = signal<ManagementSnapshot>(EMPTY_MANAGEMENT_SNAPSHOT);
+  protected readonly classrooms = signal<ManagementClassroom[]>([]);
   protected readonly loading = signal(false);
   protected readonly loadError = signal('');
   protected readonly selectedStudentId = signal('');
@@ -948,9 +994,16 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected readonly deviceForm = new FormGroup({
     macAddress: new FormControl('', { nonNullable: true }),
     ipAddress: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    classroom: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    building: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    tutor: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    classroomId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+  });
+
+  protected readonly createDeviceForm = new FormGroup({
+    macAddress: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/)],
+    }),
+    ipAddress: new FormControl('', { nonNullable: true }),
+    classroomId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
   protected readonly attendanceComment = new FormControl('', { nonNullable: true });
@@ -991,8 +1044,13 @@ export class ManagementWorkspaceComponent implements OnInit {
   });
 
   protected readonly selectedDevice = computed<ManagementDevice | null>(() => {
-    const devices = this.snapshot().devices;
-    return devices.find((device) => device.id === this.selectedDeviceId()) ?? devices[0] ?? null;
+    const id = this.selectedDeviceId();
+
+    if (!id) {
+      return null;
+    }
+
+    return this.snapshot().devices.find((device) => device.id === id) ?? null;
   });
 
   ngOnInit(): void {
@@ -1005,6 +1063,14 @@ export class ManagementWorkspaceComponent implements OnInit {
       });
 
     this.loadSnapshot();
+    this.loadClassrooms();
+  }
+
+  private loadClassrooms(): void {
+    this.managementData
+      .getClassrooms()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((classrooms) => this.classrooms.set(classrooms));
   }
 
   protected loadSnapshot(): void {
@@ -1045,6 +1111,7 @@ export class ManagementWorkspaceComponent implements OnInit {
       attendance: 'Revision de asistencias',
       justifications: 'Justificantes',
       devices: 'Gestion de dispositivos',
+      'device-create': 'Nuevo dispositivo',
       'device-edit': this.canEditDevices() ? 'Editar dispositivo' : 'Detalle del dispositivo',
       incidents: 'Gestion de incidentes',
       'incident-new': 'Crear nuevo incidente',
@@ -1075,6 +1142,7 @@ export class ManagementWorkspaceComponent implements OnInit {
       attendance: 'Audita registros de asistencia y estados por materia.',
       justifications: 'Seguimiento de justificantes aprobados, pendientes y rechazados.',
       devices: 'Monitorea terminales NFC y estado operativo por aula.',
+      'device-create': 'Registra un nuevo dispositivo NFC con su direccion MAC y salon.',
       'device-edit': 'Consulta o actualiza datos del dispositivo segun permisos disponibles.',
       incidents: 'Lista incidentes, filtra estados y consulta seguimiento.',
       'incident-new': 'Reporta un incidente con evidencia y severidad.',
@@ -1133,6 +1201,8 @@ export class ManagementWorkspaceComponent implements OnInit {
         ];
       case 'claim-detail':
         return [root, { label: 'Reclamos', route: `${base}/claims` }, { label: this.selectedClaim()?.studentName ?? 'Detalle' }];
+      case 'device-create':
+        return [root, { label: 'Dispositivos', route: `${base}/nfc-devices` }, { label: 'Nuevo' }];
       case 'device-edit':
         return [root, { label: 'Dispositivos', route: `${base}/nfc-devices` }, { label: this.selectedDevice()?.name ?? 'Detalle' }];
       case 'audit-list':
@@ -1265,6 +1335,33 @@ export class ManagementWorkspaceComponent implements OnInit {
     });
   }
 
+  protected createDevice(): void {
+    if (this.createDeviceForm.invalid || this.submitting()) {
+      this.createDeviceForm.markAllAsTouched();
+      return;
+    }
+
+    this.submitting.set(true);
+    this.managementData
+      .createDevice({
+        macAddress: this.createDeviceForm.controls.macAddress.value,
+        ipAddress: this.createDeviceForm.controls.ipAddress.value,
+        classroomId: this.createDeviceForm.controls.classroomId.value,
+      })
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe((success) => {
+        if (success) {
+          this.toastService.success('Dispositivo creado', 'El nuevo dispositivo quedo registrado.');
+          this.createDeviceForm.reset({ macAddress: '', ipAddress: '', classroomId: '' });
+          this.loadSnapshot();
+          void this.router.navigateByUrl(`${this.baseRoute()}/nfc-devices`);
+          return;
+        }
+
+        this.toastService.error('No se pudo crear', 'Verifica la MAC y el salon seleccionado.');
+      });
+  }
+
   protected saveDevice(device: ManagementDevice): void {
     if (!this.canEditDevices()) {
       this.toastService.info('Solo lectura', 'Director puede consultar y probar dispositivos, pero no editarlos.');
@@ -1281,6 +1378,7 @@ export class ManagementWorkspaceComponent implements OnInit {
       .updateDevice(device.id, {
         ipAddress: this.deviceForm.controls.ipAddress.value,
         isActive: device.status.tone === 'success',
+        classroomId: this.deviceForm.controls.classroomId.value,
       })
       .pipe(finalize(() => this.submitting.set(false)))
       .subscribe((success) => {
@@ -1395,9 +1493,7 @@ export class ManagementWorkspaceComponent implements OnInit {
       {
         macAddress: device.macAddress,
         ipAddress: device.ipAddress,
-        classroom: device.classroom,
-        building: device.building,
-        tutor: device.tutor,
+        classroomId: device.classroomId,
       },
       { emitEvent: false },
     );

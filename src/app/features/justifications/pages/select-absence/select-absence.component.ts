@@ -1,6 +1,8 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
 import { Router, RouterLink } from '@angular/router';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import {
   StudentAbsenceGroupView,
@@ -10,7 +12,7 @@ import {
 @Component({
   selector: 'app-select-absence',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, LoadingSpinnerComponent],
   template: `
     <section class="student-page">
       <a class="student-back-link" routerLink="/student/justifications">
@@ -35,40 +37,44 @@ import {
         </h2>
 
         <div class="student-absence-list">
-          @for (group of absenceGroups; track group.date) {
-            <section class="student-absence-group" [attr.aria-label]="'Faltas del ' + group.date">
-              <header>
-                <strong>{{ group.date }}</strong>
-                <label class="student-inline-check">
-                  <input
-                    type="checkbox"
-                    [checked]="isDaySelected(group)"
-                    [indeterminate]="isDayPartial(group)"
-                    (change)="toggleDay(group, $event)"
-                  />
-                  <span>Seleccionar dia</span>
-                </label>
-              </header>
+          @if (loading()) {
+            <app-loading-spinner label="Cargando faltas..." [showLabel]="true" />
+          } @else {
+            @for (group of absenceGroups(); track group.date) {
+              <section class="student-absence-group" [attr.aria-label]="'Faltas del ' + group.date">
+                <header>
+                  <strong>{{ group.date }}</strong>
+                  <label class="student-inline-check">
+                    <input
+                      type="checkbox"
+                      [checked]="isDaySelected(group)"
+                      [indeterminate]="isDayPartial(group)"
+                      (change)="toggleDay(group, $event)"
+                    />
+                    <span>Seleccionar dia</span>
+                  </label>
+                </header>
 
-              @for (absence of group.absences; track absence.id) {
-                <label class="student-absence-row">
-                  <input
-                    type="checkbox"
-                    [checked]="isSelected(absence.id)"
-                    (change)="toggleAbsence(absence.id, $event)"
-                  />
-                  <span>
-                    <strong>{{ absence.subject }}</strong>
-                    <small>{{ absence.teacher }}</small>
-                  </span>
-                  <span class="student-time-pill">
-                    <i class="fa-regular fa-clock" aria-hidden="true"></i>
-                    {{ absence.time }}
-                  </span>
-                  <span class="student-absence-pill">Ausente</span>
-                </label>
-              }
-            </section>
+                @for (absence of group.absences; track absence.id) {
+                  <label class="student-absence-row">
+                    <input
+                      type="checkbox"
+                      [checked]="isSelected(absence.id)"
+                      (change)="toggleAbsence(absence.id, $event)"
+                    />
+                    <span>
+                      <strong>{{ absence.subject }}</strong>
+                      <small>{{ absence.teacher }}</small>
+                    </span>
+                    <span class="student-time-pill">
+                      <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                      {{ absence.time }}
+                    </span>
+                    <span class="student-absence-pill">Ausente</span>
+                  </label>
+                }
+              </section>
+            }
           }
         </div>
 
@@ -96,16 +102,20 @@ export class SelectAbsenceComponent {
   private readonly toastService = inject(ToastService);
   private readonly studentApi = inject(StudentPortalApiService);
 
-  protected absenceGroups: StudentAbsenceGroupView[] = [];
+  protected readonly loading = signal(true);
+  protected readonly absenceGroups = signal<StudentAbsenceGroupView[]>([]);
   protected readonly selectedAbsenceIds = signal<readonly string[]>([]);
   protected readonly selectedCount = computed(() => this.selectedAbsenceIds().length);
 
   constructor() {
     this.studentApi
       .getJustifiableAbsences()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        finalize(() => this.loading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe((groups) => {
-        this.absenceGroups = groups;
+        this.absenceGroups.set(groups);
       });
   }
 
@@ -156,7 +166,7 @@ export class SelectAbsenceComponent {
       );
     }
 
-    const selected = this.absenceGroups
+    const selected = this.absenceGroups()
       .flatMap((group) => group.absences)
       .find((absence) => this.isSelected(absence.id));
 
