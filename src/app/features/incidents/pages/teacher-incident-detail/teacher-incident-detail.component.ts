@@ -120,7 +120,7 @@ import {
                     <span>{{ item.description }}</span>
                   </li>
                 } @empty {
-                  <li><span>Sin historial expuesto por la API.</span></li>
+                  <li><span>Sin historial disponible.</span></li>
                 }
               </ol>
             </article>
@@ -165,7 +165,7 @@ export class TeacherIncidentDetailComponent {
   }
 
   protected exportReport(): void {
-    this.toastService.info('Reporte', 'La exportacion se habilitara cuando la API entregue PDF.');
+    this.toastService.info('Reporte', 'La exportacion estara disponible proximamente.');
   }
 
   protected editIncident(): void {

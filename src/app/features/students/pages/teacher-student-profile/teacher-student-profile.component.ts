@@ -65,7 +65,7 @@ import {
                 <h2>Actividad Reciente</h2>
                 <a [routerLink]="['/teacher/students', student().id, 'attendance']">Ver todo</a>
               </header>
-              <p class="dropdown-empty">Consulta el historial completo desde el endpoint de asistencias.</p>
+              <p class="dropdown-empty">Consulta el historial completo en Asistencias.</p>
             </section>
           </div>
 

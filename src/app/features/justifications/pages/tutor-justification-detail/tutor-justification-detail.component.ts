@@ -1,10 +1,12 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
+import { apiErrorMessage } from '../../../../shared/utils/api-error.util';
 import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data.service';
 
 @Component({
@@ -221,8 +223,11 @@ export class TutorJustificationDetailComponent {
 
           this.toastService.error('No se pudo actualizar', 'No hay justificante valido para enviar.');
         },
-        error: () => {
-          this.toastService.error('No se pudo actualizar', 'La API rechazo la revision del justificante.');
+        error: (error: HttpErrorResponse) => {
+          this.toastService.error(
+            'No se pudo actualizar',
+            apiErrorMessage(error, 'No se pudo actualizar el justificante. Intenta nuevamente.'),
+          );
         },
       });
   }

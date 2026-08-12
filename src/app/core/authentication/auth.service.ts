@@ -18,6 +18,12 @@ import {
   buildGovernanceLoginUrl,
   checkmatePortalUrl,
 } from './auth-redirect-url.util';
+import { apiErrorMessage } from '../../shared/utils/api-error.util';
+
+interface AuthOutcome {
+  user: AuthenticatedUser | null;
+  message: string | null;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -49,16 +55,16 @@ export class AuthService {
         request,
       )
       .pipe(
-        catchError(() => of(null)),
         switchMap((response) => {
           const payload = response?.data;
 
           return payload?.token && payload.token_type && payload.user
             ? this.toAuthenticatedUser(payload.token, payload.token_type, payload.user)
-            : of(null);
+            : of<AuthOutcome>({ user: null, message: null });
         }),
+        catchError((error) => of<AuthOutcome>({ user: null, message: apiErrorMessage(error, '') || null })),
       )
-      .subscribe((authenticatedUser) => this.handleAuthenticatedUser(authenticatedUser));
+      .subscribe((outcome) => this.handleAuthenticatedUser(outcome));
   }
 
   signOut(): void {
@@ -96,11 +102,11 @@ export class AuthService {
     token: string,
     tokenType: string,
     user: GovernanceUser,
-  ): Observable<AuthenticatedUser | null> {
+  ): Observable<AuthOutcome> {
     const role = mapGovernanceRole(user.role);
 
     if (!role) {
-      return of(null);
+      return of({ user: null, message: null });
     }
 
     return this.http
@@ -109,16 +115,19 @@ export class AuthService {
       })
       .pipe(
         map((response) => ({
-          id: user.id,
-          fullName: user.name,
-          email: user.email,
-          role,
-          initials: this.buildInitials(user.name),
-          permissions: response.data?.permissions ?? [],
-          token,
-          tokenType,
+          user: {
+            id: user.id,
+            fullName: user.name,
+            email: user.email,
+            role,
+            initials: this.buildInitials(user.name),
+            permissions: response.data?.permissions ?? [],
+            token,
+            tokenType,
+          },
+          message: null,
         })),
-        catchError(() => of(null)),
+        catchError((error) => of<AuthOutcome>({ user: null, message: apiErrorMessage(error, '') || null })),
       );
   }
 
@@ -131,14 +140,17 @@ export class AuthService {
       .join('');
   }
 
-  private handleAuthenticatedUser(authenticatedUser: AuthenticatedUser | null): void {
-    if (authenticatedUser) {
-      this.sessionService.setUser(authenticatedUser);
+  private handleAuthenticatedUser(outcome: AuthOutcome): void {
+    if (outcome.user) {
+      this.sessionService.setUser(outcome.user);
       void this.router.navigateByUrl(this.getHomeUrl(), { replaceUrl: true });
       return;
     }
 
-    this.toastService.error('No se pudo iniciar sesion', 'Tu sesion no pudo validarse en este portal.');
+    this.toastService.error(
+      'No se pudo iniciar sesion',
+      outcome.message ?? 'Tu sesion no pudo validarse en este portal.',
+    );
     this.login();
   }
 }

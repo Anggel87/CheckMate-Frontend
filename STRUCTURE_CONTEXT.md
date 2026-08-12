@@ -1669,6 +1669,32 @@ Estado local recomendado:
 * Datos de una pantalla.
 * Modal abierto o cerrado.
 
+## Regla obligatoria: la app usa `provideZonelessChangeDetection()`
+
+`app.config.ts` habilita change detection **zoneless** (sin Zone.js). Esto significa que
+mutar un campo de clase normal dentro de un `.subscribe()` **no vuelve a renderizar la
+pantalla** — Angular no se entera del cambio hasta que ocurre un evento que sí dispara
+detección (un click, por ejemplo). Por eso una pantalla puede quedarse "cargando" hasta
+que el usuario toca algo.
+
+Todo estado que se lea en la plantilla y se escriba dentro de una suscripción, un
+`effect()` o un callback async **debe** ser un `signal()`:
+
+```typescript
+protected readonly loading = signal(true);
+protected readonly students = signal<StudentListItem[]>([]);
+
+constructor() {
+  this.studentApi
+    .getStudents()
+    .pipe(finalize(() => this.loading.set(false)))
+    .subscribe((students) => this.students.set(students));
+}
+```
+
+No debe escribirse `this.students = students;` sobre un campo plano — eso es lo que
+produce el bug de "solo carga al hacer clic en algo".
+
 ---
 
 # 28. Manejo de formularios
@@ -1746,6 +1772,45 @@ No tienes permiso para realizar esta acción.
 
 ```text
 No fue posible conectar con el servidor.
+```
+
+## Mensajes reales de la API
+
+CheckMate-API responde errores con un mensaje en español ya listo para el usuario final
+(`{message, error_code, errors}`, ver `API_REFERENCE.md` sección 2). Los mensajes
+genéricos de arriba son solo el **fallback**, no el mensaje por defecto que debe
+mostrarse siempre.
+
+Al mostrar un error de una petición HTTP:
+
+* Debe usarse `apiErrorMessage(error, textoDeRespaldo)` (`shared/utils/api-error.util.ts`)
+  para tomar el mensaje real de `error.error.message`, y caer al texto genérico solo si
+  la API no mandó uno.
+* Si la petición puede devolver **422** con errores por campo, debe usarse
+  `apiFieldErrors(error)` para leer el diccionario `{campo: [mensajes]}`, y
+  `applyServerErrors(form, fieldErrors)` (`shared/utils/form.utils.ts`) para marcarlos
+  directamente en el formulario, no solo en un toast general.
+* No deberán hardcodearse mensajes de error específicos de negocio (ej. "ya existe un
+  justificante para esta falta") cuando la API ya los manda — repetirlos a mano los deja
+  desactualizados en cuanto cambie la regla del lado del backend.
+
+Ejemplo:
+
+```typescript
+.subscribe({
+  error: (error: HttpErrorResponse) => {
+    const fieldErrors = apiFieldErrors(error);
+
+    if (fieldErrors) {
+      applyServerErrors(this.form, fieldErrors);
+    }
+
+    this.toastService.error(
+      'No se pudo guardar',
+      apiErrorMessage(error, 'No se pudo completar la accion. Intenta nuevamente.'),
+    );
+  },
+});
 ```
 
 ---

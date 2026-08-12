@@ -59,7 +59,7 @@ import {
             </article>
           } @empty {
             <article class="student-card">
-              <p class="dropdown-empty">No hay materias activas registradas en la API.</p>
+              <p class="dropdown-empty">No tienes materias activas.</p>
             </article>
           }
         </section>

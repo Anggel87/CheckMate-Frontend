@@ -4,6 +4,7 @@ import { catchError, throwError } from 'rxjs';
 import { ToastService } from '../../shared/feedback/services/toast.service';
 import { SessionService } from '../authentication/session.service';
 import { buildGovernanceLoginUrl } from '../authentication/auth-redirect-url.util';
+import { apiErrorMessage } from '../../shared/utils/api-error.util';
 
 export const errorInterceptor: HttpInterceptorFn = (request, next) => {
   const toastService = inject(ToastService);
@@ -18,7 +19,10 @@ export const errorInterceptor: HttpInterceptorFn = (request, next) => {
       } else if (error.status === 401) {
         toastService.error('Sesion expirada', 'Inicia sesion nuevamente.');
       } else if (error.status === 403) {
-        toastService.error('Acceso denegado', 'No tienes permiso para realizar esta accion.');
+        toastService.error(
+          'Acceso denegado',
+          apiErrorMessage(error, 'No tienes permiso para realizar esta accion.'),
+        );
       } else if (error.status >= 500 || error.status === 0) {
         toastService.error('Error de conexion', 'No fue posible conectar con el servidor.');
       }

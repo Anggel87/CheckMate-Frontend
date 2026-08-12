@@ -105,7 +105,7 @@ import {
             <div class="panel-heading">
               <div>
                 <h2>Alumnos</h2>
-                <p>Directorio obtenido desde la API</p>
+                <p>Directorio de alumnos</p>
               </div>
             </div>
 
@@ -180,7 +180,7 @@ export class WelcomeDashboardComponent {
   }
 
   protected welcomeDescription(): string {
-    return `Hoy es ${this.todayLabel()}. Aqui tienes el resumen con datos de la API.`;
+    return `Hoy es ${this.todayLabel()}. Aqui tienes tu resumen del dia.`;
   }
 
   protected attendanceRoute(): string {

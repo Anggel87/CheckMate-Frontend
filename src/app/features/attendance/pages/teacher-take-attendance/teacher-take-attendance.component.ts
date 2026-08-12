@@ -1,5 +1,6 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import {
@@ -10,6 +11,7 @@ import {
 } from '../../../teacher-portal/data-access/teacher-portal-api.service';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
+import { apiErrorMessage } from '../../../../shared/utils/api-error.util';
 
 @Component({
   selector: 'app-teacher-take-attendance',
@@ -190,7 +192,7 @@ export class TeacherTakeAttendanceComponent {
 
     const confirmed = await this.dialogService.confirm({
       title: 'Guardar asistencia',
-      message: 'Se registraran los estados seleccionados en la API.',
+      message: 'Se guardara la asistencia de todo el grupo.',
       confirmText: 'Guardar',
       variant: 'success',
       icon: 'fa-regular fa-floppy-disk',
@@ -209,12 +211,12 @@ export class TeacherTakeAttendanceComponent {
       )
       .subscribe({
         next: () => {
-          this.toastService.success('Asistencia guardada', 'La lista fue registrada en la API.');
+          this.toastService.success('Asistencia guardada', 'La lista fue guardada correctamente.');
         },
-        error: () => {
+        error: (error: HttpErrorResponse) => {
           this.toastService.error(
             'No se pudo guardar la asistencia',
-            'La API rechazo la apertura o actualizacion de la sesion.',
+            apiErrorMessage(error, 'No se pudo abrir o actualizar la clase. Intenta nuevamente.'),
           );
         },
       });

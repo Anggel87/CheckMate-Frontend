@@ -57,7 +57,7 @@ const EMPTY_TUTOR_RECORD: TutorAttendanceRecord = {
   classroom: '',
   status: 'Inasistencia',
   statusTone: 'neutral',
-  source: 'API',
+  source: 'Sistema',
   observation: 'No se encontro el registro solicitado.',
 };
 
@@ -354,8 +354,8 @@ export class TutoringDataService {
       classroom: '',
       status: this.toTutorAttendanceStatus(record.status),
       statusTone: record.statusTone,
-      source: 'API',
-      observation: 'Registro obtenido desde /profesor/students/{student}/attendance.',
+      source: 'Sistema',
+      observation: 'Registro de asistencia.',
     };
   }
 
@@ -377,7 +377,7 @@ export class TutoringDataService {
       sentDate: item.date,
       type: item.type,
       reason: item.type,
-      detail: 'Justificante obtenido desde la API.',
+      detail: 'Justificante registrado.',
       status,
       statusTone: this.statusTone(status),
       attachments: [],

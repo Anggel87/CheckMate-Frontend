@@ -1,5 +1,6 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { finalize } from 'rxjs';
 import {
   TeacherEmergencyStudentView,
@@ -8,6 +9,7 @@ import {
 } from '../../../teacher-portal/data-access/teacher-portal-api.service';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
+import { apiErrorMessage } from '../../../../shared/utils/api-error.util';
 
 type EmergencyMark = 'present' | 'absent' | '';
 
@@ -26,7 +28,7 @@ type EmergencyMark = 'present' | 'absent' | '';
       <div class="teacher-emergency-layout">
         <section aria-label="Lista de alumnos">
           <div class="teacher-tabs">
-            <button type="button" class="is-active">API real</button>
+            <button type="button" class="is-active">Todos los alumnos</button>
           </div>
 
           <div class="teacher-emergency-student-list">
@@ -164,10 +166,13 @@ export class TeacherEmergencyListComponent {
       )
       .subscribe({
         next: () => {
-          this.toastService.success('Lista guardada', 'La verificacion fue enviada a la API.');
+          this.toastService.success('Lista guardada', 'La verificacion fue enviada correctamente.');
         },
-        error: () => {
-          this.toastService.error('No se pudo guardar', 'La API rechazo la verificacion.');
+        error: (error: HttpErrorResponse) => {
+          this.toastService.error(
+            'No se pudo guardar',
+            apiErrorMessage(error, 'No se pudo enviar la verificacion. Intenta nuevamente.'),
+          );
         },
       });
   }

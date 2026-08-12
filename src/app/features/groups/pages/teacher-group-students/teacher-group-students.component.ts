@@ -18,7 +18,7 @@ import {
       <header class="teacher-page__header teacher-page__header--filters">
         <div>
           <h1>Alumnos del Grupo</h1>
-          <p>Listado obtenido desde la API.</p>
+          <p>Alumnos inscritos en el grupo.</p>
         </div>
 
         <div class="teacher-filter-actions">

@@ -502,9 +502,13 @@ Respuesta `AdminCareerResource`: `id, name, short_name, code, is_active, directo
 | `ip` | `sometimes, nullable, ip` |
 | `classroom_id` | `required, integer` |
 
-Respuesta `AdminDeviceResource`: `id, mac_address, ip, is_active, classroom_id`. Ping exitoso: `{ "status": "ONLINE" }`.
+Respuesta `AdminDeviceResource`: `id, mac_address, ip, is_active, classroom_id, classroom` (`{id, name, building}`, solo presente cuando el controlador hizo `->with('classroom')`/`->load('classroom')` — `index`, `show`, `store` y `update` lo cargan). Ping exitoso: `{ "status": "ONLINE" }`.
 
 **Errores:** `DEV01` (404), `DEV02` (503, ping falla), `DEV03` (409, MAC duplicada), `DEV04` (409, ya dado de baja), `CLS01` (404, salón no existe).
+
+### 8.2.1 Classrooms (solo lectura)
+
+`GET /classrooms` — sin filtros, sin paginar. Usado por el frontend para llenar el selector de salón al crear/editar un dispositivo. `ClassroomResource[]`: `{id, name, building}`, ordenado por `building, name`.
 
 ### 8.3 Groups
 
@@ -874,10 +878,13 @@ Todos requieren `assertHasCareer`, sin paginación. Solo `general`/`absences` ac
 
 | Endpoint | Respuesta |
 |---|---|
+| `GET /charts/summary` | `{ general{...}, incidents{...}, absences{...}, justifications{...} }` — los 4 bloques de abajo combinados en una sola llamada. Mismos filtros de fecha que `general`/`absences` (aplican a ambos si se mandan). Pensado para pantallas que necesitan las 4 gráficas a la vez, para no disparar 4 requests por separado. |
 | `GET /charts/general` | `{ total_students, attendance_summary{PRESENTE,RETARDO,FALTA,JUSTIFICADA}, attendance_rate }` (`attendance_rate` = PRESENTE / total, no cuenta RETARDO) |
 | `GET /charts/incidents` | `{ total, by_severity{}, by_status{} }` (sin filtro de fecha) |
 | `GET /charts/absences` | `{ by_group: [{group_id,label,total}], by_subject: [{subject_id,name,total}] }` |
 | `GET /charts/justifications` | `{ by_status: {PENDIENTE,ACEPTADO,RECHAZADO} }` (sin fechas) |
+
+Los 4 endpoints individuales se mantienen (algunas pantallas solo necesitan una gráfica), pero para dashboards que muestran todo junto usa `charts/summary` — evita el N+1 de red.
 
 ### 9.8 Devices
 
@@ -1001,6 +1008,18 @@ Se dispara en 3 puntos: registro NFC manual del profesor (`performed_by` = profe
 
 ### 11.2 Justificantes
 
+`POST /students/{student}/justifications` — el tutor académico crea un justificante **a nombre de un alumno de sus grupos** (a diferencia del alumno, que solo puede justificar sus propias faltas vía `/alumno/*`, sección 12.3). Body (multipart, `StoreJustificationRequest`):
+
+| Campo | Reglas |
+|---|---|
+| `attendance_id` | `required, integer` |
+| `reason` | `required, string, min:5, max:300` |
+| `evidence` | `nullable, file` (⚠️ opcional aquí, a diferencia de `/alumno/subjects/{s}/attendance/{a}/justify` donde es obligatoria) |
+
+Flujo (`CreateJustificationService`): 404 `USR01` si `{student}` no existe/no tiene rol alumno. 403 `PERM01` si el alumno no está en un grupo activo del tutor. 404 `ATT03` si `attendance_id` no existe o no pertenece a ese alumno. 409 `ATT04` si la asistencia no está en `FALTA`. 409 `JUST03` si ya existe un justificante para esa asistencia. Crea con `status: PENDIENTE` (mismo estado inicial que la vía alumno — requiere revisión posterior, ver abajo).
+
+Respuesta 201: `JustificationResource`.
+
 `PATCH /students/{student}/justifications/{justification}` — revisar (aprobar/rechazar) un justificante.
 
 Body:
@@ -1012,7 +1031,7 @@ Body:
 
 Flujo: 404 `USR01` si `{student}` no existe/no es alumno. 403 `PERM01` si el alumno no está en un grupo activo del tutor. 404 `JUST01` si el justificante no existe/no es de ese alumno. 409 `JUST02` si ya fue revisado (estado terminal, `PENDIENTE` es el único estado editable).
 
-⚠️ **Este es el único punto del sistema donde `attendance.status` cambia como consecuencia de una revisión**: si `status: ACEPTADO`, el backend hace `attendance.update(['status' => 'JUSTIFICADA'])`. Si se rechaza, la asistencia original (`FALTA`) no cambia.
+⚠️ **Este es el único punto del sistema donde `attendance.status` cambia como consecuencia de una revisión**: si `status: ACEPTADO`, el backend hace `attendance.update(['status' => 'JUSTIFICADA'])`. Si se rechaza, la asistencia original (`FALTA`) no cambia. Un justificante creado por el propio tutor (vía `POST` arriba) también pasa por este mismo flujo de revisión — crearlo no lo aprueba automáticamente.
 
 Respuesta: `{justification_id, student_id, status, reviewed_by, reviewed_at, comment}`.
 
@@ -1067,11 +1086,13 @@ Respuesta 201: `JustificationResource`.
 
 ### 12.4 Subjects (perspectiva Alumno)
 
-`GET /subjects` — materias según los horarios activos del grupo del alumno (ciclo escolar `ACTIVO`). `SubjectResource[]`: `{id, name, teacher{id,full_name}, schedule: "Lunes 08:00-09:00, Miércoles 08:00-09:00"}`.
+`GET /subjects` — materias según los horarios activos del grupo del alumno (ciclo escolar `ACTIVO`). `SubjectResource[]`: `{id, name, teacher{id,full_name}, schedule: "Lunes 08:00-09:00, Miércoles 08:00-09:00", attendance_summary{on_time, late, absent}}`. El `attendance_summary` por materia se calcula con **una sola consulta agrupada** para todas las materias del listado (no una consulta por materia) — antes solo venía en `GET /subjects/{subject}`, obligando al frontend a pedir cada materia individualmente después de la lista; ahora ya viene incluido en el listado.
 
-`GET /subjects/{subject}` — binding implícito. Si no hay horario activo del grupo para esa materia → **403 `PERM01`** (⚠️ no 404, aunque la materia simplemente no aplique). `SubjectDetailResource` con `attendance_summary{on_time, late, absent}` (⚠️ `JUSTIFICADA` no se cuenta en ninguno de los 3 buckets).
+`GET /subjects/{subject}` — binding implícito. Si no hay horario activo del grupo para esa materia → **403 `PERM01`** (⚠️ no 404, aunque la materia simplemente no aplique). `SubjectDetailResource` con `attendance_summary{on_time, late, absent}` (⚠️ `JUSTIFICADA` no se cuenta en ninguno de los 3 buckets). Sigue existiendo para cuando se necesita el detalle de una sola materia (incluye `classroom`, que el listado no trae).
 
-`GET /subjects/{subject}/attendance` — mismo chequeo 403 `PERM01`. `AttendanceRecordResource[]`: `{attendance_id, date, status, justifiable}` (`justifiable: true` solo si `status === FALTA` y aún no tiene justificante).
+`GET /attendance` — historial de asistencia de **todas** las materias del alumno en una sola consulta (join contra los horarios activos de su grupo, sin filtrar por materia). Pensado para pantallas que necesitan el historial completo (ej. calendario de asistencia, cálculo de % general) sin tener que pedir `GET /subjects/{id}/attendance` una vez por materia. Mismo `AttendanceRecordResource` que abajo, con `subject_id` para que el cliente pueda agrupar/cruzar contra `GET /subjects`.
+
+`GET /subjects/{subject}/attendance` — mismo chequeo 403 `PERM01`. `AttendanceRecordResource[]`: `{attendance_id, subject_id, date, status, justifiable}` (`justifiable: true` solo si `status === FALTA` y aún no tiene justificante).
 
 ---
 

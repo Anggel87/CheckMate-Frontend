@@ -154,7 +154,17 @@ limpia la sesion y redirige nuevamente al login central.
 4. redirige a `{governanceLogoutUrl}?client_id=...&returnUrl=https://checkmate.com`;
 5. Gobernanza invalida su sesion web y vuelve al `returnUrl` autorizado.
 
-## 9. Archivos modificados
+## 9. Mensajes de error del login
+
+Si el canje de código o la llamada a `GET {checkmateApiUrl}/me` fallan, el toast de error
+ya no usa un texto fijo ("Tu sesion no pudo validarse en este portal."). `AuthService`
+lee `error.error.message` de la respuesta (ver `shared/utils/api-error.util.ts`,
+`apiErrorMessage()`) y solo cae al texto genérico si la API no mandó un mensaje. Esto
+hace visibles al usuario final motivos reales como "Tu cuenta no está vinculada a un
+perfil local todavía." o "Tu cuenta está desactivada. Contacta al administrador." en vez
+de un mensaje genérico sin contexto.
+
+## 10. Archivos modificados
 
 Frontend:
 

@@ -1,11 +1,17 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
-import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
+import {
+  applyServerErrors,
+  controlErrorMessage,
+  markFormGroupTouched,
+} from '../../../../shared/utils/form.utils';
+import { apiErrorMessage, apiFieldErrors } from '../../../../shared/utils/api-error.util';
 import { TeacherPortalApiService } from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 type TeacherIncidentControl = 'incidentType' | 'title' | 'description' | 'severity' | 'location';
@@ -234,8 +240,17 @@ export class TeacherNewIncidentComponent {
           this.toastService.success('Incidente registrado', 'Continua con la verificacion de alumnos.');
           void this.router.navigateByUrl(`${this.incidentBaseRoute()}/emergency-list`);
         },
-        error: () => {
-          this.toastService.error('No se pudo registrar', 'La API rechazo el incidente.');
+        error: (error: HttpErrorResponse) => {
+          const fieldErrors = apiFieldErrors(error);
+
+          if (fieldErrors) {
+            applyServerErrors(this.form, fieldErrors);
+          }
+
+          this.toastService.error(
+            'No se pudo registrar',
+            apiErrorMessage(error, 'No se pudo registrar el incidente. Intenta nuevamente.'),
+          );
         },
       });
   }

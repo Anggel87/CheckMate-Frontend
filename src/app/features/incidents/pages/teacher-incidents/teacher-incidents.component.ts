@@ -80,7 +80,7 @@ import {
                   </a>
                 </article>
               } @empty {
-                <p class="dropdown-empty">No hay incidentes reportados desde la API.</p>
+                <p class="dropdown-empty">No hay incidentes reportados.</p>
               }
             </div>
 

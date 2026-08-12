@@ -65,7 +65,7 @@ import {
               </div>
             } @empty {
               <div class="teacher-table__row">
-                <span>Sin justificantes expuestos por la API para este alumno.</span>
+                <span>Este alumno no tiene justificantes.</span>
               </div>
             }
           </div>

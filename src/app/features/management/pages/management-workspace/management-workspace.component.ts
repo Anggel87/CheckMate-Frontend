@@ -479,7 +479,7 @@ import {
                     }
                   </select>
                   @if (classrooms().length === 0) {
-                    <p class="checkmate-field-error">No hay salones disponibles desde la API.</p>
+                    <p class="checkmate-field-error">No hay salones disponibles.</p>
                   }
                 </label>
               </div>
@@ -515,7 +515,7 @@ import {
                 </div>
                 <aside class="management-form__aside">
                   <span [class]="statusClass(device.status)">{{ device.status.label }}</span>
-                  <p>El endpoint de edicion de dispositivos esta documentado para Administrador. Director conserva consulta y prueba.</p>
+                  <p>Solo el administrador puede editar dispositivos. El director puede consultarlos y probarlos.</p>
                   <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="pingDevice(device)">
                     Probar dispositivo
                   </button>
@@ -1087,7 +1087,7 @@ export class ManagementWorkspaceComponent implements OnInit {
         },
         error: () => {
           this.snapshot.set(EMPTY_MANAGEMENT_SNAPSHOT);
-          this.loadError.set('La API real no respondio en localhost:8000 o la sesion no tiene permiso vigente.');
+          this.loadError.set('No se pudo cargar la informacion. Verifica tu conexion o vuelve a iniciar sesion.');
         },
       });
   }
@@ -1150,7 +1150,7 @@ export class ManagementWorkspaceComponent implements OnInit {
       'incident-attendance': 'Valida presentes y faltantes durante un evento critico.',
       claims: 'Da seguimiento a reclamaciones academicas o de asistencia.',
       'claim-detail': 'Revisa evidencia, comentarios y acciones de resolucion.',
-      statistics: 'Indicadores operativos conectados a las graficas del backend cuando estan disponibles.',
+      statistics: 'Indicadores y graficas del periodo actual.',
       audit: 'Selecciona el modulo que deseas auditar.',
       'audit-list': 'Consulta trazabilidad por modulo dentro del alcance del director.',
     };
@@ -1313,9 +1313,12 @@ export class ManagementWorkspaceComponent implements OnInit {
     this.managementData
       .createIncident(payload)
       .pipe(finalize(() => this.submitting.set(false)))
-      .subscribe((success) => {
-        if (!success) {
-          this.toastService.error('No se pudo crear el incidente', 'Revisa la informacion e intenta nuevamente.');
+      .subscribe((result) => {
+        if (!result.success) {
+          this.toastService.error(
+            'No se pudo crear el incidente',
+            result.message ?? 'Revisa la informacion e intenta nuevamente.',
+          );
           return;
         }
 
@@ -1349,8 +1352,8 @@ export class ManagementWorkspaceComponent implements OnInit {
         classroomId: this.createDeviceForm.controls.classroomId.value,
       })
       .pipe(finalize(() => this.submitting.set(false)))
-      .subscribe((success) => {
-        if (success) {
+      .subscribe((result) => {
+        if (result.success) {
           this.toastService.success('Dispositivo creado', 'El nuevo dispositivo quedo registrado.');
           this.createDeviceForm.reset({ macAddress: '', ipAddress: '', classroomId: '' });
           this.loadSnapshot();
@@ -1358,7 +1361,7 @@ export class ManagementWorkspaceComponent implements OnInit {
           return;
         }
 
-        this.toastService.error('No se pudo crear', 'Verifica la MAC y el salon seleccionado.');
+        this.toastService.error('No se pudo crear', result.message ?? 'Verifica la MAC y el salon seleccionado.');
       });
   }
 
@@ -1381,14 +1384,17 @@ export class ManagementWorkspaceComponent implements OnInit {
         classroomId: this.deviceForm.controls.classroomId.value,
       })
       .pipe(finalize(() => this.submitting.set(false)))
-      .subscribe((success) => {
-        if (success) {
+      .subscribe((result) => {
+        if (result.success) {
           this.toastService.success('Dispositivo actualizado', 'Los cambios fueron guardados.');
           void this.router.navigateByUrl(`${this.baseRoute()}/nfc-devices`);
           return;
         }
 
-        this.toastService.error('No se pudo guardar', 'El endpoint de edicion no esta disponible para este rol.');
+        this.toastService.error(
+          'No se pudo guardar',
+          result.message ?? 'No tienes permiso para editar este dispositivo.',
+        );
       });
   }
 
@@ -1412,9 +1418,12 @@ export class ManagementWorkspaceComponent implements OnInit {
     const present = incident.roster.filter((item) => item.status === 'PRESENTE').length;
     const absent = incident.roster.filter((item) => item.status === 'AUSENTE').length;
 
-    this.managementData.updateIncidentStudents(incident, this.attendanceComment.value).subscribe((success) => {
-      if (!success) {
-        this.toastService.error('No se pudo guardar', 'El pase de lista del incidente no fue actualizado.');
+    this.managementData.updateIncidentStudents(incident, this.attendanceComment.value).subscribe((result) => {
+      if (!result.success) {
+        this.toastService.error(
+          'No se pudo guardar',
+          result.message ?? 'El pase de lista del incidente no fue actualizado.',
+        );
         return;
       }
 
@@ -1437,8 +1446,8 @@ export class ManagementWorkspaceComponent implements OnInit {
       return;
     }
 
-    this.managementData.closeIncident(incident.id, 'RESOLVED').subscribe((success) => {
-      if (success) {
+    this.managementData.closeIncident(incident.id, 'RESOLVED').subscribe((result) => {
+      if (result.success) {
         this.toastService.success('Incidente concluido', 'El incidente fue cerrado correctamente.');
         this.snapshot.update((snapshot) => ({
           ...snapshot,
@@ -1449,14 +1458,17 @@ export class ManagementWorkspaceComponent implements OnInit {
         return;
       }
 
-      this.toastService.error('No se pudo concluir', 'El servidor rechazo la operacion.');
+      this.toastService.error(
+        'No se pudo concluir',
+        result.message ?? 'No se pudo completar la accion. Intenta nuevamente.',
+      );
     });
   }
 
   protected claimAction(claim: ManagementClaim, action: string): void {
-    this.managementData.updateClaimAction(claim.id, action, this.claimComment.value).subscribe((success) => {
-      if (!success) {
-        this.toastService.error('Accion no aplicada', 'No fue posible actualizar la reclamacion.');
+    this.managementData.updateClaimAction(claim.id, action, this.claimComment.value).subscribe((result) => {
+      if (!result.success) {
+        this.toastService.error('Accion no aplicada', result.message ?? 'No fue posible actualizar la reclamacion.');
         return;
       }
 

@@ -1,12 +1,18 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
-import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
+import {
+  applyServerErrors,
+  controlErrorMessage,
+  markFormGroupTouched,
+} from '../../../../shared/utils/form.utils';
+import { apiErrorMessage, apiFieldErrors } from '../../../../shared/utils/api-error.util';
 import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data.service';
 
 type TutorJustificationControl = 'studentId' | 'attendanceRecordId' | 'type' | 'reason';
@@ -219,10 +225,16 @@ export class TutorNewJustificationComponent {
           this.toastService.success('Justificante enviado', 'Quedo registrado para revision.');
           void this.router.navigateByUrl('/tutor/justifications');
         },
-        error: () => {
+        error: (error: HttpErrorResponse) => {
+          const fieldErrors = apiFieldErrors(error);
+
+          if (fieldErrors) {
+            applyServerErrors(this.form, fieldErrors);
+          }
+
           this.toastService.error(
             'No se pudo enviar el justificante',
-            'Verifica el alumno, la ausencia seleccionada y vuelve a intentar.',
+            apiErrorMessage(error, 'Verifica el alumno, la ausencia seleccionada y vuelve a intentar.'),
           );
         },
       });

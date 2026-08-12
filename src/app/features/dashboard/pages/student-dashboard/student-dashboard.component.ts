@@ -54,7 +54,6 @@ import {
           <article class="student-card student-current-course">
             <header>
               <h2>Materia Actual</h2>
-              <app-status-badge label="API REAL" tone="info" icon="fa-solid fa-circle" />
             </header>
 
             @if (currentCourse()) {
@@ -84,7 +83,7 @@ import {
                 </div>
               </div>
             } @else {
-              <p class="dropdown-empty">No hay materias activas registradas en la API.</p>
+              <p class="dropdown-empty">No tienes materias activas.</p>
             }
           </article>
 

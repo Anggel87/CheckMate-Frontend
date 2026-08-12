@@ -1,11 +1,17 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
-import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
+import {
+  applyServerErrors,
+  controlErrorMessage,
+  markFormGroupTouched,
+} from '../../../../shared/utils/form.utils';
+import { apiErrorMessage, apiFieldErrors } from '../../../../shared/utils/api-error.util';
 import { StudentPortalApiService } from '../../../student-portal/data-access/student-portal-api.service';
 
 type StudentJustificationControl = 'type' | 'reason';
@@ -69,7 +75,7 @@ type StudentJustificationControl = 'type' | 'reason';
 
         <section class="student-evidence-section">
           <h2>Adjuntar Evidencia</h2>
-          <p>La API exige evidencia para crear un justificante.</p>
+          <p>Adjunta evidencia para respaldar tu justificante.</p>
 
           <label class="student-file-drop" for="justification-file">
             <input id="justification-file" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="selectFile($event)" />
@@ -169,10 +175,16 @@ export class NewJustificationComponent {
           );
           void this.router.navigateByUrl('/student/justifications');
         },
-        error: () => {
+        error: (error: HttpErrorResponse) => {
+          const fieldErrors = apiFieldErrors(error);
+
+          if (fieldErrors) {
+            applyServerErrors(this.form, fieldErrors);
+          }
+
           this.toastService.error(
             'No se pudo enviar el justificante',
-            'La API rechazo la solicitud. Revisa la falta y el archivo.',
+            apiErrorMessage(error, 'No se pudo enviar la solicitud. Revisa la falta y el archivo.'),
           );
         },
       });

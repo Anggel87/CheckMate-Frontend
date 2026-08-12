@@ -21,7 +21,7 @@ import {
       <header class="student-page__header student-page__header--action">
         <div>
           <h1>Mis Asistencias</h1>
-          <p>Registros obtenidos desde la API de CheckMate.</p>
+          <p>Consulta tus asistencias registradas.</p>
         </div>
 
         <button type="button" class="btn-checkmate btn-checkmate-primary">
@@ -139,7 +139,7 @@ import {
                   <app-status-badge [label]="record.status" [tone]="record.statusTone" />
                 </a>
               } @empty {
-                <p class="dropdown-empty">Sin registros recientes desde la API.</p>
+                <p class="dropdown-empty">Sin registros recientes.</p>
               }
             </div>
           </article>

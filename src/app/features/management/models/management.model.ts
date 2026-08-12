@@ -26,6 +26,11 @@ export type ManagementView =
 
 export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
+export interface ManagementActionResult {
+  success: boolean;
+  message: string | null;
+}
+
 export interface ManagementStatus {
   label: string;
   tone: StatusTone;

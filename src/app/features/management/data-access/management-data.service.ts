@@ -4,10 +4,12 @@ import { AuthService } from '../../../core/authentication/auth.service';
 import { CheckmateApiService } from '../../../core/api/checkmate-api.service';
 import { unwrapData } from '../../../core/api/api-adapter';
 import { UserRole } from '../../../core/enums/user-role.enum';
+import { apiErrorMessage } from '../../../shared/utils/api-error.util';
 import {
   DeviceCreatePayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
+  ManagementActionResult,
   ManagementAuditLog,
   ManagementCharts,
   ManagementClaim,
@@ -33,38 +35,50 @@ export class ManagementDataService {
   private readonly authService = inject(AuthService);
   private readonly checkmateApi = inject(CheckmateApiService);
 
+  /**
+   * Groups, the students of the first group and its schedule are fetched once here and
+   * threaded through, instead of letting getStudents()/getSchedules()/getJustifications()
+   * each independently re-fetch groups (and getJustifications() re-fetch students on top of
+   * that) — those redundant round trips used to multiply the real number of requests fired
+   * by this single screen load.
+   */
   getSnapshot(): Observable<ManagementSnapshot> {
-    return forkJoin({
-      groups: this.getGroups().pipe(catchError(() => of([]))),
-      students: this.getStudents().pipe(catchError(() => of([]))),
-      teachers: this.getTeachers().pipe(catchError(() => of([]))),
-      subjects: this.getSubjects().pipe(catchError(() => of([]))),
-      schedules: this.getSchedules().pipe(catchError(() => of([]))),
-      justifications: this.getJustifications().pipe(catchError(() => of([]))),
-      devices: this.getDevices().pipe(catchError(() => of([]))),
-      incidents: this.getIncidents().pipe(catchError(() => of([]))),
-      claims: this.getClaims().pipe(catchError(() => of([]))),
-      logs: this.getLogs('students').pipe(catchError(() => of([]))),
-      charts: this.getCharts().pipe(catchError(() => of(EMPTY_MANAGEMENT_SNAPSHOT.charts))),
-    });
-  }
+    return this.getGroups()
+      .pipe(catchError(() => of([])))
+      .pipe(
+        switchMap((groups) => {
+          const groupId = groups[0]?.id;
 
-  getGroups(): Observable<ManagementGroup[]> {
-    return this.checkmateApi.getCollection(`${this.scopeBase()}/groups`, (item, index) => this.toGroup(item, index));
-  }
-
-  getStudents(): Observable<ManagementStudent[]> {
-    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
-      return this.getGroups().pipe(
-        map((groups) => groups[0]?.id),
-        switchMap((groupId) =>
-          groupId
-            ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
-                this.toStudent(item, index),
-              )
-            : of([]),
+          return forkJoin({
+            groups: of(groups),
+            students: this.studentsForGroup(groupId).pipe(catchError(() => of([]))),
+            teachers: this.getTeachers().pipe(catchError(() => of([]))),
+            schedules: this.schedulesForGroup(groupId).pipe(catchError(() => of([]))),
+            devices: this.getDevices().pipe(catchError(() => of([]))),
+            incidents: this.getIncidents().pipe(catchError(() => of([]))),
+            claims: this.getClaims().pipe(catchError(() => of([]))),
+            logs: this.getLogs('students').pipe(catchError(() => of([]))),
+            charts: this.getCharts().pipe(catchError(() => of(EMPTY_MANAGEMENT_SNAPSHOT.charts))),
+          });
+        }),
+        switchMap((partial) =>
+          forkJoin({
+            subjects: this.subjectsFor(partial.schedules).pipe(catchError(() => of([]))),
+            justifications: this.justificationsForStudent(partial.students[0]?.id).pipe(
+              catchError(() => of([])),
+            ),
+          }).pipe(map((rest) => ({ ...partial, ...rest }))),
         ),
       );
+  }
+
+  private studentsForGroup(groupId: string | undefined): Observable<ManagementStudent[]> {
+    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
+      return groupId
+        ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
+            this.toStudent(item, index),
+          )
+        : of([]);
     }
 
     if (this.currentRole() === UserRole.ADMIN) {
@@ -76,13 +90,19 @@ export class ManagementDataService {
     return of([]);
   }
 
-  getTeachers(): Observable<ManagementTeacher[]> {
-    return this.checkmateApi.getCollection(`${this.scopeBase()}/teachers`, (item, index) =>
-      this.toTeacher(item, index),
-    );
+  private schedulesForGroup(groupId: string | undefined): Observable<ManagementSchedule[]> {
+    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+      return of([]);
+    }
+
+    return groupId
+      ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
+          this.toSchedule(item, index),
+        )
+      : of([]);
   }
 
-  getSubjects(): Observable<ManagementSubject[]> {
+  private subjectsFor(schedules: ManagementSchedule[]): Observable<ManagementSubject[]> {
     if (this.currentRole() === UserRole.ADMIN) {
       return this.checkmateApi.getCollection(`${this.adminBase()}/subjects`, (item, index) =>
         this.toSubject(item, index),
@@ -90,44 +110,33 @@ export class ManagementDataService {
     }
 
     if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
-      return this.getSchedules().pipe(map((schedules) => this.subjectsFromSchedules(schedules)));
+      return of(this.subjectsFromSchedules(schedules));
     }
 
     return of([]);
   }
 
-  getSchedules(): Observable<ManagementSchedule[]> {
-    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
-      return this.getGroups().pipe(
-        map((groups) => groups[0]?.id),
-        switchMap((groupId) =>
-          groupId
-            ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
-                this.toSchedule(item, index),
-              )
-            : of([]),
-        ),
-      );
+  private justificationsForStudent(studentId: string | undefined): Observable<ManagementJustification[]> {
+    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+      return of([]);
     }
 
-    return of([]);
+    return studentId
+      ? this.checkmateApi.getCollection(
+          `${this.directorBase()}/students/${studentId}/justifications`,
+          (item, index) => this.toJustification(item, index),
+        )
+      : of([]);
   }
 
-  getJustifications(): Observable<ManagementJustification[]> {
-    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
-      return this.getStudents().pipe(
-        map((students) => students[0]?.id),
-        switchMap((studentId) =>
-          studentId
-            ? this.checkmateApi.getCollection(`${this.directorBase()}/students/${studentId}/justifications`, (item, index) =>
-                this.toJustification(item, index),
-              )
-            : of([]),
-        ),
-      );
-    }
+  getGroups(): Observable<ManagementGroup[]> {
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/groups`, (item, index) => this.toGroup(item, index));
+  }
 
-    return of([]);
+  getTeachers(): Observable<ManagementTeacher[]> {
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/teachers`, (item, index) =>
+      this.toTeacher(item, index),
+    );
   }
 
   getDevices(): Observable<ManagementDevice[]> {
@@ -187,23 +196,13 @@ export class ManagementDataService {
       return of(EMPTY_MANAGEMENT_SNAPSHOT.charts);
     }
 
-    return forkJoin({
-      general: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/general`).pipe(
-        catchError(() => of(null)),
-      ),
-      incidents: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/incidents`).pipe(
-        catchError(() => of(null)),
-      ),
-      absences: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/absences`).pipe(
-        catchError(() => of(null)),
-      ),
-      justifications: this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/justifications`).pipe(
-        catchError(() => of(null)),
-      ),
-    }).pipe(map((response) => this.toCharts(response, EMPTY_MANAGEMENT_SNAPSHOT.charts)));
+    return this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/summary`).pipe(
+      map((response) => this.toCharts(toRecord(unwrapData(response)) ?? {}, EMPTY_MANAGEMENT_SNAPSHOT.charts)),
+      catchError(() => of(EMPTY_MANAGEMENT_SNAPSHOT.charts)),
+    );
   }
 
-  createIncident(payload: IncidentCreatePayload): Observable<boolean> {
+  createIncident(payload: IncidentCreatePayload): Observable<ManagementActionResult> {
     const formData = new FormData();
     formData.set('title', payload.title);
     formData.set('description', payload.description);
@@ -218,21 +217,21 @@ export class ManagementDataService {
     }
 
     return this.checkmateApi.post<unknown>(`${this.directorBase()}/incidents`, formData).pipe(
-      map(() => true),
-      catchError(() => of(false)),
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
     );
   }
 
-  closeIncident(incidentId: string, resolution: string): Observable<boolean> {
+  closeIncident(incidentId: string, resolution: string): Observable<ManagementActionResult> {
     return this.checkmateApi
       .post<unknown>(`${this.directorBase()}/incidents/${incidentId}/close`, { resolution })
       .pipe(
-        map(() => true),
-        catchError(() => of(false)),
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
       );
   }
 
-  updateIncidentStudents(incident: ManagementIncident, notes: string): Observable<boolean> {
+  updateIncidentStudents(incident: ManagementIncident, notes: string): Observable<ManagementActionResult> {
     return this.checkmateApi
       .patch<unknown>(`${this.directorBase()}/incidents/${incident.id}/students`, {
         students: incident.roster.map((item) => ({
@@ -242,16 +241,16 @@ export class ManagementDataService {
         })),
       })
       .pipe(
-        map(() => true),
-        catchError(() => of(false)),
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
       );
   }
 
-  updateClaimAction(claimId: string, action: string, comment: string): Observable<boolean> {
+  updateClaimAction(claimId: string, action: string, comment: string): Observable<ManagementActionResult> {
     const base = this.currentRole() === UserRole.TUTOR_TEACHER ? this.tutorBase() : this.directorBase();
     return this.checkmateApi.patch<unknown>(`${base}/claims/${claimId}/action`, { action, comment }).pipe(
-      map(() => true),
-      catchError(() => of(false)),
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
     );
   }
 
@@ -262,9 +261,9 @@ export class ManagementDataService {
     );
   }
 
-  createDevice(payload: DeviceCreatePayload): Observable<boolean> {
+  createDevice(payload: DeviceCreatePayload): Observable<ManagementActionResult> {
     if (this.currentRole() !== UserRole.ADMIN) {
-      return of(false);
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
     }
 
     return this.checkmateApi
@@ -274,17 +273,17 @@ export class ManagementDataService {
         classroom_id: payload.classroomId,
       })
       .pipe(
-        map(() => true),
-        catchError(() => of(false)),
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
       );
   }
 
   updateDevice(
     deviceId: string,
     payload: { ipAddress: string; isActive: boolean; classroomId?: string },
-  ): Observable<boolean> {
+  ): Observable<ManagementActionResult> {
     if (this.currentRole() !== UserRole.ADMIN) {
-      return of(false);
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
     }
 
     return this.checkmateApi
@@ -294,8 +293,8 @@ export class ManagementDataService {
         ...(payload.classroomId ? { classroom_id: payload.classroomId } : {}),
       })
       .pipe(
-        map(() => true),
-        catchError(() => of(false)),
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
       );
   }
 
@@ -535,19 +534,11 @@ export class ManagementDataService {
     };
   }
 
-  private toCharts(
-    response: {
-      general: unknown;
-      incidents: unknown;
-      absences: unknown;
-      justifications: unknown;
-    },
-    fallback: ManagementCharts,
-  ): ManagementCharts {
-    const general = toRecord(unwrapData(response.general));
-    const incidents = toRecord(unwrapData(response.incidents));
-    const absences = toRecord(unwrapData(response.absences));
-    const justifications = toRecord(toRecord(unwrapData(response.justifications))?.['by_status']);
+  private toCharts(response: UnknownRecord, fallback: ManagementCharts): ManagementCharts {
+    const general = toRecord(unwrapData(response['general']));
+    const incidents = toRecord(unwrapData(response['incidents']));
+    const absences = toRecord(unwrapData(response['absences']));
+    const justifications = toRecord(toRecord(unwrapData(response['justifications']))?.['by_status']);
 
     return {
       totalStudents: readNumber(general, 'total_students', fallback.totalStudents),

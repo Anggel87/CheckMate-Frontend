@@ -162,7 +162,7 @@ export class SelectAbsenceComponent {
     if (this.selectedCount() > 1) {
       this.toastService.info(
         'Justificacion individual',
-        'La API actual registra una falta por justificante. Se usara la primera seleccionada.',
+        'Solo puedes justificar una falta a la vez. Se usara la primera seleccionada.',
       );
     }
 

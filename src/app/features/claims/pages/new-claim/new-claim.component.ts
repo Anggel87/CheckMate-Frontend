@@ -1,11 +1,17 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
-import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
+import {
+  applyServerErrors,
+  controlErrorMessage,
+  markFormGroupTouched,
+} from '../../../../shared/utils/form.utils';
+import { apiErrorMessage, apiFieldErrors } from '../../../../shared/utils/api-error.util';
 import {
   StudentCourseView,
   StudentPortalApiService,
@@ -187,8 +193,17 @@ export class NewClaimComponent {
           );
           void this.router.navigateByUrl('/student/claims');
         },
-        error: () => {
-          this.toastService.error('No se pudo enviar el reclamo', 'Revisa los datos e intenta de nuevo.');
+        error: (error: HttpErrorResponse) => {
+          const fieldErrors = apiFieldErrors(error);
+
+          if (fieldErrors) {
+            applyServerErrors(this.form, fieldErrors);
+          }
+
+          this.toastService.error(
+            'No se pudo enviar el reclamo',
+            apiErrorMessage(error, 'Revisa los datos e intenta de nuevo.'),
+          );
         },
       });
   }

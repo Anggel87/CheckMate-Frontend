@@ -26,7 +26,7 @@ export const AUTHENTICATION_ROUTES: Routes = [
       ),
     data: {
       title: 'Recuperar contraseña',
-      description: 'Flujo preparado para integrarse con autenticación y API.',
+      description: 'Disponible próximamente.',
     },
   },
   {
@@ -37,7 +37,7 @@ export const AUTHENTICATION_ROUTES: Routes = [
       ),
     data: {
       title: 'Restablecer contraseña',
-      description: 'Pantalla base para restablecimiento de contraseña.',
+      description: 'Disponible próximamente.',
     },
   },
   {
@@ -48,7 +48,7 @@ export const AUTHENTICATION_ROUTES: Routes = [
       ),
     data: {
       title: 'Autenticación multifactor',
-      description: 'Estructura preparada para segundo factor.',
+      description: 'Disponible próximamente.',
     },
   },
 ];

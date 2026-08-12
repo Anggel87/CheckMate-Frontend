@@ -60,7 +60,7 @@ import {
             </article>
           } @empty {
             <article class="teacher-card">
-              <p class="dropdown-empty">No hay grupos asignados desde la API.</p>
+              <p class="dropdown-empty">No tienes grupos asignados.</p>
             </article>
           }
         </section>

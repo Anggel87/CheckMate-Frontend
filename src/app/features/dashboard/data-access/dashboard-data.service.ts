@@ -85,7 +85,7 @@ export class DashboardDataService {
             {
               title: 'Alumnos registrados',
               value: String(studentsTotal),
-              description: 'Desde la API',
+              description: 'Total actual',
               icon: 'fa-solid fa-user-graduate',
               tone: 'info',
             },
@@ -176,7 +176,7 @@ export class DashboardDataService {
         {
           title: 'Grupos asignados',
           value: String(groupCount),
-          description: 'Segun API',
+          description: 'Asignados a ti',
           icon: 'fa-solid fa-users',
           tone: 'info',
         },

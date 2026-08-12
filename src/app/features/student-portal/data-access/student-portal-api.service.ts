@@ -183,7 +183,7 @@ export const EMPTY_STUDENT_ATTENDANCE_DETAIL: StudentAttendanceDetailView = {
   scheduledTime: '',
   registeredTime: '',
   classroom: '',
-  observations: 'No se encontro el registro solicitado en la API.',
+  observations: 'No se encontro el registro solicitado.',
 };
 
 @Injectable({
@@ -199,12 +199,16 @@ export class StudentPortalApiService {
   }
 
   getDashboard(): Observable<StudentDashboardView> {
-    return forkJoin({
-      profile: this.getProfile().pipe(catchError(() => of(EMPTY_STUDENT_PROFILE))),
-      subjects: this.getSubjects().pipe(catchError(() => of([]))),
-      records: this.getAttendanceRecords().pipe(catchError(() => of([]))),
-      justifications: this.getJustifications().pipe(catchError(() => of([]))),
-    }).pipe(
+    return this.getSubjects().pipe(
+      catchError(() => of([])),
+      switchMap((subjects) =>
+        forkJoin({
+          profile: this.getProfile().pipe(catchError(() => of(EMPTY_STUDENT_PROFILE))),
+          subjects: of(subjects),
+          records: this.attendanceRecordsFor(subjects).pipe(catchError(() => of([]))),
+          justifications: this.getJustifications().pipe(catchError(() => of([]))),
+        }),
+      ),
       map(({ profile, subjects, records, justifications }) => {
         const metrics = this.buildMetrics(records, justifications);
         const currentCourse = subjects[0] ?? null;
@@ -233,21 +237,7 @@ export class StudentPortalApiService {
   }
 
   getSubjects(): Observable<StudentCourseView[]> {
-    return this.api
-      .getCollection('/alumno/subjects', (item) => this.toSubject(item))
-      .pipe(
-        switchMap((subjects) => {
-          if (!subjects.length) {
-            return of([]);
-          }
-
-          return forkJoin(
-            subjects.map((subject) =>
-              this.getSubject(subject.id).pipe(catchError(() => of(subject))),
-            ),
-          );
-        }),
-      );
+    return this.api.getCollection('/alumno/subjects', (item) => this.toSubject(item));
   }
 
   getSubject(subjectId: string): Observable<StudentCourseView> {
@@ -268,23 +258,25 @@ export class StudentPortalApiService {
 
   getAttendanceRecords(): Observable<StudentAttendanceRecordView[]> {
     return this.getSubjects().pipe(
-      switchMap((subjects) => {
-        if (!subjects.length) {
-          return of([]);
-        }
+      catchError(() => of([])),
+      switchMap((subjects) => this.attendanceRecordsFor(subjects)),
+    );
+  }
 
-        return forkJoin(
-          subjects.map((subject) =>
-            this.getSubjectAttendance(subject.id, subject).pipe(catchError(() => of([]))),
-          ),
-        ).pipe(
-          map((groups) =>
-            groups
-              .flat()
-              .sort((left, right) => this.sortByRawDateDescending(left.rawDate, right.rawDate)),
-          ),
-        );
-      }),
+  private attendanceRecordsFor(
+    subjects: readonly StudentCourseView[],
+  ): Observable<StudentAttendanceRecordView[]> {
+    const subjectById = new Map(subjects.map((subject) => [subject.id, subject] as const));
+
+    return this.api.getCollection<unknown>('/alumno/attendance', (item) => item).pipe(
+      map((records) =>
+        records
+          .map((raw) => {
+            const subjectId = readString(toRecord(raw), 'subject_id');
+            return this.toAttendanceRecord(raw, subjectId, subjectById.get(subjectId) ?? null);
+          })
+          .sort((left, right) => this.sortByRawDateDescending(left.rawDate, right.rawDate)),
+      ),
     );
   }
 
@@ -478,7 +470,7 @@ export class StudentPortalApiService {
       classroom: record.location ?? '',
       observations: record.justifiable
         ? 'Este registro puede justificarse con evidencia valida.'
-        : 'Registro obtenido desde la API de asistencia.',
+        : 'Este registro no puede justificarse.',
     };
   }
 
@@ -495,14 +487,14 @@ export class StudentPortalApiService {
       {
         label: 'Asistencia Total',
         value: `${attendanceRate}%`,
-        detail: records.length ? 'Calculada con registros reales' : 'Sin registros',
+        detail: records.length ? 'Basada en tu historial' : 'Sin registros',
         icon: 'fa-solid fa-percent',
         tone: this.metricTone(attendanceRate),
       },
       {
         label: 'Faltas',
         value: String(absent),
-        detail: 'Registradas en la API',
+        detail: 'Total del periodo',
         icon: 'fa-solid fa-xmark',
         tone: absent > 0 ? 'danger' : 'success',
       },

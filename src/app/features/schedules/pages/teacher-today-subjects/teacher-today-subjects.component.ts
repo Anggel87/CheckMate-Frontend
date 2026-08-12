@@ -85,7 +85,7 @@ import {
               </article>
             } @empty {
               <article class="teacher-card">
-                <p class="dropdown-empty">No hay clases programadas hoy en la API.</p>
+                <p class="dropdown-empty">No hay clases programadas para hoy.</p>
               </article>
             }
           </section>
