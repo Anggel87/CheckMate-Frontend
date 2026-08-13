@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
+import { downloadPdfReport } from '../../../../shared/utils/pdf-report.util';
 import {
   EMPTY_TEACHER_INCIDENT_DETAIL,
   TeacherIncidentDetailView,
@@ -165,7 +166,33 @@ export class TeacherIncidentDetailComponent {
   }
 
   protected exportReport(): void {
-    this.toastService.info('Reporte', 'La exportacion estara disponible proximamente.');
+    const incident = this.incident();
+
+    downloadPdfReport({
+      title: `Incidente #${incident.id}`,
+      subtitle: incident.title || incident.type,
+      meta: [
+        { label: 'Tipo', value: incident.type },
+        { label: 'Fecha', value: incident.date },
+        { label: 'Reportado por', value: incident.reporter },
+        { label: 'Severidad', value: incident.priority },
+        { label: 'Ubicacion', value: incident.location || 'Sin ubicacion' },
+        { label: 'Descripcion', value: incident.description || 'Sin descripcion registrada.' },
+      ],
+      tables: [
+        {
+          title: 'Estado de alumnos',
+          columns: ['Alumno', 'Estado'],
+          rows: incident.students.map((student) => [student.name, student.status || 'Pendiente']),
+        },
+        {
+          title: 'Historial',
+          columns: ['Fecha', 'Evento', 'Descripcion'],
+          rows: incident.history.map((item) => [item.date, item.title, item.description]),
+        },
+      ],
+      fileName: `incidente-${incident.id}.pdf`,
+    });
   }
 
   protected editIncident(): void {

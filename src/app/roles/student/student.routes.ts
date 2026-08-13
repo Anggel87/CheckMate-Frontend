@@ -149,6 +149,14 @@ export const STUDENT_ROUTES: Routes = [
                 (component) => component.NewJustificationComponent,
               ),
           },
+          {
+            path: ':justificationId',
+            data: { topbarTitle: 'Justificante' },
+            loadComponent: () =>
+              import(
+                '../../features/justifications/pages/student-justification-detail/student-justification-detail.component'
+              ).then((component) => component.StudentJustificationDetailComponent),
+          },
         ],
       },
       {

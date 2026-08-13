@@ -1,12 +1,12 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import { downloadPdfReport } from '../../../../shared/utils/pdf-report.util';
 import {
   StudentAttendanceOverviewView,
-  StudentCalendarDayView,
   StudentMetricView,
   StudentPortalApiService,
   StudentAttendanceRecordView,
@@ -24,7 +24,7 @@ import {
           <p>Consulta tus asistencias registradas.</p>
         </div>
 
-        <button type="button" class="btn-checkmate btn-checkmate-primary">
+        <button type="button" class="btn-checkmate btn-checkmate-primary" (click)="downloadReport()">
           <i class="fa-solid fa-download" aria-hidden="true"></i>
           <span>Descargar Reporte</span>
         </button>
@@ -59,13 +59,32 @@ import {
             <header>
               <h2>Calendario de Asistencia</h2>
               <div class="student-calendar-nav" aria-label="Cambiar mes">
-                <button type="button" class="student-icon-button" aria-label="Mes anterior">
+                <button
+                  type="button"
+                  class="student-icon-button"
+                  aria-label="Mes anterior"
+                  (click)="goToPreviousMonth()"
+                >
                   <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
                 </button>
                 <strong>{{ monthLabel() }}</strong>
-                <button type="button" class="student-icon-button" aria-label="Mes siguiente">
+                <button
+                  type="button"
+                  class="student-icon-button"
+                  aria-label="Mes siguiente"
+                  (click)="goToNextMonth()"
+                >
                   <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
                 </button>
+                @if (!isCurrentMonth()) {
+                  <button
+                    type="button"
+                    class="btn-checkmate btn-checkmate-secondary student-calendar-today"
+                    (click)="goToCurrentMonth()"
+                  >
+                    Hoy
+                  </button>
+                }
               </div>
             </header>
 
@@ -155,9 +174,22 @@ export class StudentAttendanceOverviewComponent {
   protected readonly dayNames = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
   protected readonly loading = signal(true);
   protected readonly metrics = signal<StudentMetricView[]>([]);
-  protected readonly calendarWeeks = signal<StudentCalendarDayView[][]>([]);
+  protected readonly records = signal<StudentAttendanceRecordView[]>([]);
   protected readonly recentRecords = signal<StudentAttendanceRecordView[]>([]);
-  protected readonly monthLabel = signal('');
+
+  private readonly today = new Date();
+  protected readonly viewYear = signal(this.today.getFullYear());
+  protected readonly viewMonth = signal(this.today.getMonth());
+
+  protected readonly calendarWeeks = computed(() =>
+    this.studentApi.buildCalendarWeeks(this.records(), this.viewYear(), this.viewMonth()),
+  );
+  protected readonly monthLabel = computed(() =>
+    this.studentApi.monthLabelFor(this.viewYear(), this.viewMonth()),
+  );
+  protected readonly isCurrentMonth = computed(
+    () => this.viewYear() === this.today.getFullYear() && this.viewMonth() === this.today.getMonth(),
+  );
 
   constructor() {
     this.studentApi
@@ -168,9 +200,43 @@ export class StudentAttendanceOverviewComponent {
       )
       .subscribe((overview: StudentAttendanceOverviewView) => {
         this.metrics.set(overview.metrics);
-        this.calendarWeeks.set(overview.calendarWeeks);
+        this.records.set(overview.records);
         this.recentRecords.set(overview.recentRecords);
-        this.monthLabel.set(overview.monthLabel);
       });
+  }
+
+  protected goToPreviousMonth(): void {
+    this.shiftMonth(-1);
+  }
+
+  protected goToNextMonth(): void {
+    this.shiftMonth(1);
+  }
+
+  protected goToCurrentMonth(): void {
+    this.viewYear.set(this.today.getFullYear());
+    this.viewMonth.set(this.today.getMonth());
+  }
+
+  private shiftMonth(delta: number): void {
+    const date = new Date(this.viewYear(), this.viewMonth() + delta, 1);
+    this.viewYear.set(date.getFullYear());
+    this.viewMonth.set(date.getMonth());
+  }
+
+  protected downloadReport(): void {
+    downloadPdfReport({
+      title: 'Reporte de Asistencias',
+      subtitle: this.monthLabel(),
+      meta: this.metrics().map((metric) => ({ label: metric.label, value: metric.value })),
+      tables: [
+        {
+          title: 'Historial de asistencias',
+          columns: ['Fecha', 'Materia', 'Estado', 'Hora'],
+          rows: this.records().map((record) => [record.date, record.subject, record.status, record.time]),
+        },
+      ],
+      fileName: `reporte-asistencias-${this.viewYear()}-${this.viewMonth() + 1}.pdf`,
+    });
   }
 }

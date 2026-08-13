@@ -388,7 +388,8 @@ export class TutoringDataService {
   private toTutorClaim(value: unknown): TutorClaim {
     const record = toRecord(value);
     const student = toRecord(record?.['student']);
-    const group = toRecord(student?.['group']);
+    const group = toRecord(record?.['group']);
+    const career = toRecord(record?.['career']);
     const subject = toRecord(record?.['subject']);
     const status = this.toTutorStatus(readString(record, 'status'));
     const evidenceUrl = readString(record, 'evidence_url');
@@ -399,7 +400,7 @@ export class TutoringDataService {
       studentName: readFullName(student),
       group: this.groupLabel(group),
       title: readString(subject, 'name', 'Reclamo'),
-      location: this.groupLabel(group),
+      location: readString(career, 'short_name') || readString(career, 'name'),
       incidentDate: formatApiDate(readString(record, 'created_at')),
       reportedAt: formatApiDate(readString(record, 'created_at')),
       status,

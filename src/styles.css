@@ -65,6 +65,10 @@ textarea {
   letter-spacing: 0;
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -3588,6 +3592,11 @@ app-root {
 .student-calendar-nav strong {
   min-width: 128px;
   text-align: center;
+}
+
+.student-calendar-today {
+  margin-left: 4px;
+  padding: 6px 14px;
 }
 
 .student-calendar-legend {

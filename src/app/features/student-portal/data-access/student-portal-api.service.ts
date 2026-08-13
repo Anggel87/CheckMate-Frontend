@@ -83,6 +83,18 @@ export interface StudentJustificationView {
   attachments: number;
 }
 
+export interface StudentJustificationDetailView {
+  id: string;
+  subject: string;
+  date: string;
+  reason: string;
+  status: string;
+  statusTone: StatusBadgeTone;
+  evidenceUrl: string;
+  reviewedBy: string;
+  comment: string;
+}
+
 export interface StudentClaimView {
   id: string;
   date: string;
@@ -115,9 +127,8 @@ export interface StudentCalendarDayView {
 
 export interface StudentAttendanceOverviewView {
   metrics: StudentMetricView[];
-  calendarWeeks: StudentCalendarDayView[][];
+  records: StudentAttendanceRecordView[];
   recentRecords: StudentAttendanceRecordView[];
-  monthLabel: string;
 }
 
 export interface StudentDashboardView {
@@ -172,6 +183,18 @@ export const EMPTY_STUDENT_PROFILE: StudentProfileView = {
   address: '',
   avatarUrl: '/profile-avatar.svg',
   attendanceTotal: 0,
+};
+
+export const EMPTY_STUDENT_JUSTIFICATION_DETAIL: StudentJustificationDetailView = {
+  id: '',
+  subject: '',
+  date: '',
+  reason: '',
+  status: '',
+  statusTone: 'neutral',
+  evidenceUrl: '',
+  reviewedBy: '',
+  comment: '',
 };
 
 export const EMPTY_STUDENT_ATTENDANCE_DETAIL: StudentAttendanceDetailView = {
@@ -229,11 +252,25 @@ export class StudentPortalApiService {
     }).pipe(
       map(({ records, justifications }) => ({
         metrics: this.buildMetrics(records, justifications),
-        calendarWeeks: this.buildCalendar(records),
+        records,
         recentRecords: records.slice(0, 4),
-        monthLabel: this.currentMonthLabel(),
       })),
     );
+  }
+
+  buildCalendarWeeks(
+    records: readonly StudentAttendanceRecordView[],
+    year: number,
+    month: number,
+  ): StudentCalendarDayView[][] {
+    return this.buildCalendar(records, year, month);
+  }
+
+  monthLabelFor(year: number, month: number): string {
+    return new Intl.DateTimeFormat('es-MX', {
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(year, month, 1));
   }
 
   getSubjects(): Observable<StudentCourseView[]> {
@@ -304,6 +341,17 @@ export class StudentPortalApiService {
 
   getJustifications(): Observable<StudentJustificationView[]> {
     return this.api.getCollection('/alumno/justifications', (item) => this.toJustification(item));
+  }
+
+  getJustificationDetail(justificationId: string | null): Observable<StudentJustificationDetailView> {
+    if (!justificationId) {
+      return of(EMPTY_STUDENT_JUSTIFICATION_DETAIL);
+    }
+
+    return this.api.get<unknown>(`/alumno/justifications/${justificationId}`).pipe(
+      map((response) => this.toJustificationDetail(unwrapData(response))),
+      catchError(() => of(EMPTY_STUDENT_JUSTIFICATION_DETAIL)),
+    );
   }
 
   getClaims(): Observable<StudentClaimView[]> {
@@ -440,6 +488,25 @@ export class StudentPortalApiService {
     };
   }
 
+  private toJustificationDetail(value: unknown): StudentJustificationDetailView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const reviewedBy = toRecord(record?.['reviewed_by']);
+    const status = readString(record, 'status');
+
+    return {
+      id: readId(record),
+      subject: readString(subject, 'name'),
+      date: formatApiDate(readString(record, 'date')),
+      reason: readFirstString(record, ['reason', 'description'], 'Sin motivo registrado.'),
+      status: this.requestStatusLabel(status),
+      statusTone: toneFromRequestStatus(status),
+      evidenceUrl: readString(record, 'evidence_url'),
+      reviewedBy: readFullName(reviewedBy),
+      comment: readString(record, 'comment'),
+    };
+  }
+
   private toClaim(value: unknown): StudentClaimView {
     const record = toRecord(value);
     const subject = toRecord(record?.['subject']);
@@ -534,10 +601,12 @@ export class StudentPortalApiService {
     return [...groups.entries()].map(([date, absences]) => ({ date, absences }));
   }
 
-  private buildCalendar(records: readonly StudentAttendanceRecordView[]): StudentCalendarDayView[][] {
+  private buildCalendar(
+    records: readonly StudentAttendanceRecordView[],
+    year: number,
+    month: number,
+  ): StudentCalendarDayView[][] {
     const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
     const firstDay = new Date(year, month, 1);
     const totalDays = new Date(year, month + 1, 0).getDate();
     const statusByDay = new Map<number, StudentAttendanceTone>();
@@ -564,7 +633,8 @@ export class StudentPortalApiService {
     for (let day = 1; day <= totalDays; day += 1) {
       days.push({
         day: String(day),
-        selected: day === today.getDate(),
+        selected:
+          day === today.getDate() && month === today.getMonth() && year === today.getFullYear(),
         tone: statusByDay.get(day),
       });
     }
@@ -681,13 +751,6 @@ export class StudentPortalApiService {
     }
 
     return undefined;
-  }
-
-  private currentMonthLabel(): string {
-    return new Intl.DateTimeFormat('es-MX', {
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date());
   }
 
   private sortByRawDateDescending(left: string, right: string): number {

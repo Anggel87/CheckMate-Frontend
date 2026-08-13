@@ -4,6 +4,7 @@ import { finalize } from 'rxjs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import { downloadPdfReport } from '../../../../shared/utils/pdf-report.util';
 import {
   TeacherPortalApiService,
   TeacherStudentView,
@@ -26,7 +27,7 @@ import {
             Status: Todos
             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
           </button>
-          <button type="button" class="btn-checkmate btn-checkmate-primary">
+          <button type="button" class="btn-checkmate btn-checkmate-primary" (click)="exportStudents()">
             <i class="fa-solid fa-download" aria-hidden="true"></i>
             Exportar
           </button>
@@ -116,5 +117,24 @@ export class TeacherGroupStudentsComponent {
       .join('')
       .slice(0, 2)
       .toUpperCase();
+  }
+
+  protected exportStudents(): void {
+    downloadPdfReport({
+      title: 'Alumnos del Grupo',
+      meta: [{ label: 'Total de alumnos', value: String(this.students().length) }],
+      tables: [
+        {
+          columns: ['Alumno', 'Matricula', 'Asistencia', 'Estado'],
+          rows: this.students().map((student) => [
+            student.name,
+            student.enrollment,
+            `${student.attendance}%`,
+            student.status,
+          ]),
+        },
+      ],
+      fileName: 'alumnos-del-grupo.pdf',
+    });
   }
 }

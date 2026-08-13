@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
+import { FileUploadComponent } from '../../../../shared/components/file-upload/file-upload.component';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
@@ -26,7 +27,7 @@ const JUSTIFICATION_TYPES = [
 @Component({
   selector: 'app-tutor-new-justification',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, FormValidationMessageComponent],
+  imports: [ReactiveFormsModule, RouterLink, FormValidationMessageComponent, FileUploadComponent],
   template: `
     <section class="teacher-page tutor-new-justification-page">
       <a class="student-back-link" routerLink="/tutor/justifications">
@@ -112,17 +113,14 @@ const JUSTIFICATION_TYPES = [
             <h2>Evidencia adjunta</h2>
             <span>Opcional pero recomendado</span>
           </div>
-          <label class="student-file-drop" for="tutor-justification-file">
-            <input
-              id="tutor-justification-file"
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              (change)="selectFile($event)"
-            />
-            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-            <strong>{{ evidenceName() || 'Haz clic para subir o arrastra y suelta' }}</strong>
-            <small>PNG, JPG, PDF (Max. 5MB)</small>
-          </label>
+          <app-file-upload
+            title="Haz clic para subir o arrastra y suelta"
+            description="Adjunta evidencia para respaldar el justificante."
+            accept="image/png,image/jpeg,application/pdf"
+            [maxSizeMb]="5"
+            (filesSelected)="selectFile($event)"
+            (fileRemoved)="clearEvidence()"
+          />
         </section>
 
         <footer class="student-form-actions">
@@ -152,7 +150,6 @@ export class TutorNewJustificationComponent {
 
   protected readonly students = this.tutoringData.students;
   protected readonly saving = signal(false);
-  protected readonly evidenceName = signal('');
   private evidence: File | null = null;
   protected readonly justificationTypes = JUSTIFICATION_TYPES;
   protected readonly form = this.formBuilder.nonNullable.group({
@@ -184,10 +181,12 @@ export class TutorNewJustificationComponent {
     return controlErrorMessage(this.form.controls[controlName], label);
   }
 
-  protected selectFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.evidence = input.files?.[0] ?? null;
-    this.evidenceName.set(this.evidence?.name ?? '');
+  protected selectFile(files: File[]): void {
+    this.evidence = files[0] ?? null;
+  }
+
+  protected clearEvidence(): void {
+    this.evidence = null;
   }
 
   protected async submit(): Promise<void> {

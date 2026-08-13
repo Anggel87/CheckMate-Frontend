@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
+import { FileUploadComponent } from '../../../../shared/components/file-upload/file-upload.component';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import {
@@ -22,7 +23,7 @@ type StudentClaimControl = 'subjectId' | 'reason' | 'description';
 @Component({
   selector: 'app-new-claim',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, FormValidationMessageComponent],
+  imports: [ReactiveFormsModule, RouterLink, FormValidationMessageComponent, FileUploadComponent],
   template: `
     <section class="student-page">
       <a class="student-back-link" routerLink="/student/claims">
@@ -105,12 +106,14 @@ type StudentClaimControl = 'subjectId' | 'reason' | 'description';
 
         <section class="student-evidence-section">
           <h2>Adjuntar Evidencia <small>(Opcional)</small></h2>
-          <label class="student-file-drop" for="claim-file">
-            <input id="claim-file" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="selectFile($event)" />
-            <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
-            <strong>{{ evidenceName() || 'Arrastra y suelta tus archivos aqui' }}</strong>
-            <small>o haz clic para explorar (JPG, PNG, PDF)</small>
-          </label>
+          <app-file-upload
+            title="Arrastra y suelta tus archivos aqui"
+            description="o haz clic para explorar (JPG, PNG, PDF)"
+            accept="image/png,image/jpeg,application/pdf"
+            [maxSizeMb]="5"
+            (filesSelected)="selectFile($event)"
+            (fileRemoved)="clearEvidence()"
+          />
         </section>
 
         <footer class="student-form-actions">
@@ -140,7 +143,6 @@ export class NewClaimComponent {
   private readonly studentApi = inject(StudentPortalApiService);
 
   protected readonly saving = signal(false);
-  protected readonly evidenceName = signal('');
   protected readonly subjects = signal<StudentCourseView[]>([]);
   private evidence: File | null = null;
   protected readonly form = this.formBuilder.nonNullable.group({
@@ -162,10 +164,12 @@ export class NewClaimComponent {
     return controlErrorMessage(this.form.controls[controlName], label);
   }
 
-  protected selectFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.evidence = input.files?.[0] ?? null;
-    this.evidenceName.set(this.evidence?.name ?? '');
+  protected selectFile(files: File[]): void {
+    this.evidence = files[0] ?? null;
+  }
+
+  protected clearEvidence(): void {
+    this.evidence = null;
   }
 
   protected submit(): void {

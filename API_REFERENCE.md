@@ -56,7 +56,7 @@ Http::baseUrl(config('services.governance.base_url'))  // env GOVERNANCE_BASE_UR
 Aplicado a prácticamente todas las rutas protegidas. Flujo:
 
 1. Lee `Authorization: Bearer <token>`. Si falta → **401 `AUTH05`** "Tu sesión ha expirado. Inicia sesión nuevamente."
-2. Resuelve `governance_user_id` llamando a `GovernanceClient::me($token)`, **cacheado 120s** (`GOVERNANCE_AUTH_CACHE_TTL`, key `governance:auth:sha256(token)`). Si la llamada falla o no retorna `data.user.id` → mismo **401 `AUTH05`** (y ese resultado nulo también queda cacheado 120s, así que un fallo transitorio del servicio de Gobernanza puede "atascar" el 401 durante ese tiempo).
+2. Resuelve `governance_user_id` llamando a `GovernanceClient::me($token)`, **cacheado 120s** (`GOVERNANCE_AUTH_CACHE_TTL`, key `governance:auth:sha256(token)`). Si la llamada falla o no retorna `data.user.id` → mismo **401 `AUTH05`**. Cuando la caché está fría, la resolución se hace bajo un `Cache::lock()` (key `lock:governance:auth:sha256(token)`, espera hasta 5s): si varias requests con el mismo token llegan casi al mismo tiempo (típico: una sola pantalla del frontend disparando varias peticiones en paralelo), solo la primera llama de verdad a Gobernanza y las demás reutilizan ese resultado en vez de repetir la llamada cada una.
 3. Busca `User::where('governance_user_id', ...)` en la BD local. Si no hay perfil local vinculado → **403 sin `error_code`** ("Tu cuenta no está vinculada a un perfil local todavía.").
 4. Si el usuario local existe pero `active = false` → **403 `AUTH03`** ("Tu cuenta está desactivada. Contacta al administrador.").
 5. Si todo pasa, `Auth::setUser($user)` — de ahí en adelante `request()->user()` es el modelo `User` local.

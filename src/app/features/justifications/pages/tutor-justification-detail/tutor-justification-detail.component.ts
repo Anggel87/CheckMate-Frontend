@@ -7,6 +7,7 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import { apiErrorMessage } from '../../../../shared/utils/api-error.util';
+import { downloadPdfReport } from '../../../../shared/utils/pdf-report.util';
 import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data.service';
 
 @Component({
@@ -195,7 +196,35 @@ export class TutorJustificationDetailComponent {
   }
 
   protected downloadPdf(): void {
-    this.toastService.info('PDF preparado', 'El reporte del justificante esta listo para descargar.');
+    const justification = this.justification();
+
+    downloadPdfReport({
+      title: `Justificante ${justification.id}`,
+      subtitle: justification.title,
+      meta: [
+        { label: 'Alumno', value: `${justification.studentName} - ${justification.group}` },
+        { label: 'Materia', value: justification.subject },
+        { label: 'Profesor', value: justification.teacher },
+        { label: 'Fecha de ausencia', value: justification.absenceDate },
+        { label: 'Tipo', value: justification.type },
+        { label: 'Fecha de envio', value: justification.sentDate },
+        { label: 'Estado', value: justification.status },
+        { label: 'Motivo detallado', value: justification.detail },
+      ],
+      tables: [
+        {
+          title: 'Observaciones',
+          columns: ['Fecha', 'Autor', 'Rol', 'Mensaje'],
+          rows: justification.observations.map((observation) => [
+            observation.date,
+            observation.author,
+            observation.role,
+            observation.message,
+          ]),
+        },
+      ],
+      fileName: `justificante-${justification.id}.pdf`,
+    });
   }
 
   protected downloadAttachment(fileName: string): void {

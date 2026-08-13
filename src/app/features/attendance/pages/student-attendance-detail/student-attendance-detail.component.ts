@@ -83,7 +83,7 @@ import {
               class="btn-checkmate btn-checkmate-secondary"
               routerLink="/student/justifications/select-absence"
             >
-              <i class="fa-regular fa-file-arrow-up" aria-hidden="true"></i>
+              <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
               Subir Justificante
             </a>
           </aside>

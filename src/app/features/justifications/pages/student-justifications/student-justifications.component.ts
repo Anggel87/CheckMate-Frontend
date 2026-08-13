@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
 import { RouterLink } from '@angular/router';
@@ -35,7 +35,12 @@ import {
         <label class="student-search-control">
           <span class="sr-only">Buscar justificantes</span>
           <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-          <input class="checkmate-input" type="search" placeholder="Buscar por fecha o motivo..." />
+          <input
+            class="checkmate-input"
+            type="search"
+            placeholder="Buscar por fecha o motivo..."
+            (input)="search.set(inputValue($event))"
+          />
         </label>
 
         <div class="student-tabs" role="tablist" aria-label="Estado de justificante">
@@ -55,7 +60,7 @@ import {
         <app-loading-spinner label="Cargando justificantes..." [showLabel]="true" />
       } @else {
         <article class="student-card student-request-list-card">
-          @if (justifications().length === 0) {
+          @if (filteredJustifications().length === 0) {
             <app-empty-state
               icon="fa-regular fa-file-lines"
               title="Sin justificantes"
@@ -63,8 +68,8 @@ import {
             />
           } @else {
             <div class="student-request-list">
-              @for (item of justifications(); track item.id) {
-                <a class="student-request-row" routerLink="/student/justifications">
+              @for (item of filteredJustifications(); track item.id) {
+                <a class="student-request-row" [routerLink]="['/student/justifications', item.id]">
                   <div>
                     <app-status-badge [label]="item.status" [tone]="item.statusTone" />
                     <h2>{{ item.title }}</h2>
@@ -86,7 +91,7 @@ import {
         </article>
 
         <footer class="student-table-footer">
-          <span>Mostrando {{ justifications().length }} registros</span>
+          <span>Mostrando {{ filteredJustifications().length }} registros</span>
           <div class="student-pagination" aria-label="Paginacion de justificantes">
             <button type="button" disabled aria-label="Pagina anterior">
               <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -107,8 +112,32 @@ export class StudentJustificationsComponent {
 
   protected readonly activeTab = signal('Todos');
   protected readonly tabs = ['Todos', 'Pendientes', 'Aprobados', 'Rechazados'];
+  protected readonly search = signal('');
   protected readonly loading = signal(true);
   protected readonly justifications = signal<StudentJustificationView[]>([]);
+
+  private readonly tabStatus: Record<string, string> = {
+    Pendientes: 'Pendiente',
+    Aprobados: 'Aprobado',
+    Rechazados: 'Rechazado',
+  };
+
+  protected readonly filteredJustifications = computed(() => {
+    const tab = this.activeTab();
+    const term = this.search().trim().toLowerCase();
+    const status = this.tabStatus[tab];
+
+    return this.justifications().filter((item) => {
+      const matchesStatus = !status || item.status === status;
+      const matchesTerm =
+        term.length === 0 ||
+        item.date.toLowerCase().includes(term) ||
+        item.title.toLowerCase().includes(term) ||
+        item.description.toLowerCase().includes(term);
+
+      return matchesStatus && matchesTerm;
+    });
+  });
 
   constructor() {
     this.studentApi
@@ -120,5 +149,9 @@ export class StudentJustificationsComponent {
       .subscribe((justifications) => {
         this.justifications.set(justifications);
       });
+  }
+
+  protected inputValue(event: Event): string {
+    return (event.target as HTMLInputElement).value;
   }
 }

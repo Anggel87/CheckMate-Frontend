@@ -20,7 +20,7 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
                 [class.is-active]="activeDepartment() === department"
                 (click)="activeDepartment.set(department)"
               >
-                @if (department === 'TICS') {
+                @if (department === 'TIC') {
                   <i class="fa-solid fa-computer" aria-hidden="true"></i>
                 }
                 {{ department }}
@@ -95,12 +95,15 @@ export class TutorClaimsComponent {
   protected readonly groups = computed(() =>
     Array.from(new Set(this.claims().map((claim) => claim.group).filter(Boolean))),
   );
-  protected readonly activeDepartment = signal('TICS');
+  protected readonly activeDepartment = signal('');
   protected readonly activeGroup = signal('');
   protected readonly filteredClaims = computed(() =>
     this.claims().filter((claim) => {
+      const department = this.activeDepartment();
       const group = this.activeGroup();
-      return !group || claim.group === group;
+      const matchesDepartment = !department || claim.location === department;
+      const matchesGroup = !group || claim.group === group;
+      return matchesDepartment && matchesGroup;
     }),
   );
 
