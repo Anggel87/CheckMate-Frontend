@@ -89,13 +89,13 @@ import {
                     </td>
                     <td><app-status-badge [label]="claim.status" [tone]="claim.statusTone" /></td>
                     <td>
-                      <button
-                        type="button"
+                      <a
                         class="student-icon-button"
+                        [routerLink]="['/student/claims', claim.id]"
                         [attr.aria-label]="'Ver ' + claim.title"
                       >
                         <i class="fa-regular fa-eye" aria-hidden="true"></i>
-                      </button>
+                      </a>
                     </td>
                   </tr>
                 }

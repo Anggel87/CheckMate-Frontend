@@ -57,6 +57,7 @@ type StudentClaimControl = 'subjectId' | 'reason' | 'description';
               @for (subject of subjects(); track subject.id) {
                 <option [value]="subject.id">{{ subject.name }} - {{ subject.teacher }}</option>
               }
+              <option value="other">Otro (no relacionado a una materia)</option>
             </select>
           </div>
           <app-form-validation-message
@@ -80,6 +81,9 @@ type StudentClaimControl = 'subjectId' | 'reason' | 'description';
               <option value="Estado incorrecto">Estado incorrecto</option>
               <option value="No aparece mi registro">No aparece mi registro</option>
               <option value="Observacion incorrecta">Observacion incorrecta</option>
+              <option value="Situacion con un alumno">Situacion con un alumno</option>
+              <option value="Instalaciones">Instalaciones (baños, mobiliario, etc.)</option>
+              <option value="Otro">Otro</option>
             </select>
           </div>
           <app-form-validation-message
@@ -181,10 +185,11 @@ export class NewClaimComponent {
 
     const value = this.form.getRawValue();
     const description = `${value.reason}. ${value.description}`;
+    const subjectId = value.subjectId === 'other' ? null : value.subjectId;
 
     this.saving.set(true);
     this.studentApi
-      .createClaim(value.subjectId, description, this.evidence)
+      .createClaim(subjectId, description, this.evidence)
       .pipe(
         finalize(() => this.saving.set(false)),
         takeUntilDestroyed(this.destroyRef),

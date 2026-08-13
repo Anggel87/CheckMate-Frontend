@@ -118,6 +118,14 @@ export const STUDENT_ROUTES: Routes = [
                 (component) => component.NewClaimComponent,
               ),
           },
+          {
+            path: ':claimId',
+            data: { topbarTitle: 'Reclamo' },
+            loadComponent: () =>
+              import('../../features/claims/pages/student-claim-detail/student-claim-detail.component').then(
+                (component) => component.StudentClaimDetailComponent,
+              ),
+          },
         ],
       },
       {

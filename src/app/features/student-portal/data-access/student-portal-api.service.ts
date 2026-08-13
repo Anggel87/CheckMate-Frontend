@@ -104,6 +104,17 @@ export interface StudentClaimView {
   statusTone: StatusBadgeTone;
 }
 
+export interface StudentClaimDetailView {
+  id: string;
+  subject: string;
+  teacher: string;
+  date: string;
+  description: string;
+  status: string;
+  statusTone: StatusBadgeTone;
+  evidenceUrl: string;
+}
+
 export interface StudentAbsenceView {
   id: string;
   subjectId: string;
@@ -195,6 +206,17 @@ export const EMPTY_STUDENT_JUSTIFICATION_DETAIL: StudentJustificationDetailView 
   evidenceUrl: '',
   reviewedBy: '',
   comment: '',
+};
+
+export const EMPTY_STUDENT_CLAIM_DETAIL: StudentClaimDetailView = {
+  id: '',
+  subject: '',
+  teacher: '',
+  date: '',
+  description: '',
+  status: '',
+  statusTone: 'neutral',
+  evidenceUrl: '',
 };
 
 export const EMPTY_STUDENT_ATTENDANCE_DETAIL: StudentAttendanceDetailView = {
@@ -358,6 +380,17 @@ export class StudentPortalApiService {
     return this.api.getCollection('/alumno/claims', (item) => this.toClaim(item));
   }
 
+  getClaimDetail(claimId: string | null): Observable<StudentClaimDetailView> {
+    if (!claimId) {
+      return of(EMPTY_STUDENT_CLAIM_DETAIL);
+    }
+
+    return this.api.get<unknown>(`/alumno/claims/${claimId}`).pipe(
+      map((response) => this.toClaimDetail(unwrapData(response))),
+      catchError(() => of(EMPTY_STUDENT_CLAIM_DETAIL)),
+    );
+  }
+
   getJustifiableAbsences(): Observable<StudentAbsenceGroupView[]> {
     return this.getAttendanceRecords().pipe(
       map((records) => records.filter((record) => record.justifiable && record.statusTone === 'absent')),
@@ -365,9 +398,13 @@ export class StudentPortalApiService {
     );
   }
 
-  createClaim(subjectId: string, description: string, evidence: File | null): Observable<boolean> {
+  createClaim(subjectId: string | null, description: string, evidence: File | null): Observable<boolean> {
     const formData = new FormData();
-    formData.set('subject_id', subjectId);
+
+    if (subjectId) {
+      formData.set('subject_id', subjectId);
+    }
+
     formData.set('description', description);
 
     if (evidence) {
@@ -522,6 +559,24 @@ export class StudentPortalApiService {
       description: readString(record, 'description', teacherName),
       status: this.requestStatusLabel(status),
       statusTone: toneFromRequestStatus(status),
+    };
+  }
+
+  private toClaimDetail(value: unknown): StudentClaimDetailView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const teacher = toRecord(record?.['teacher']);
+    const status = readString(record, 'status');
+
+    return {
+      id: readId(record),
+      subject: readString(subject, 'name', 'General'),
+      teacher: readFullName(teacher),
+      date: formatApiDate(readFirstString(record, ['created_at', 'date'])),
+      description: readString(record, 'description'),
+      status: this.requestStatusLabel(status),
+      statusTone: toneFromRequestStatus(status),
+      evidenceUrl: readString(record, 'evidence_url'),
     };
   }
 
