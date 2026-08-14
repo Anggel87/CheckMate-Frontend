@@ -49,6 +49,7 @@ export interface TutorAttendanceRecord {
   studentId: string;
   subject: string;
   date: string;
+  rawDate: string;
   time: string;
   classroom: string;
   status: TutorAttendanceStatus;

@@ -55,13 +55,13 @@ import {
                 <app-status-badge [label]="record.type" [tone]="record.typeTone" />
                 <span>{{ record.subject }}</span>
                 <i [class]="record.evidenceIcon" aria-hidden="true"></i>
-                <button
-                  type="button"
+                <a
                   class="icon-button"
+                  [routerLink]="['/teacher/students', student().id, 'justifications', record.id]"
                   [attr.aria-label]="'Ver justificante ' + record.date"
                 >
                   <i class="fa-regular fa-eye" aria-hidden="true"></i>
-                </button>
+                </a>
               </div>
             } @empty {
               <div class="teacher-table__row">

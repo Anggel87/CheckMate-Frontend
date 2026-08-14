@@ -63,6 +63,14 @@ export const TEACHER_ROUTES: Routes = [
                 (component) => component.TeacherStudentJustificationsComponent,
               ),
           },
+          {
+            path: ':studentId/justifications/:justificationId',
+            data: { topbarTitle: 'Justificantes' },
+            loadComponent: () =>
+              import('../../features/students/pages/teacher-justification-detail/teacher-justification-detail.component').then(
+                (component) => component.TeacherJustificationDetailComponent,
+              ),
+          },
         ],
       },
       {
@@ -182,9 +190,11 @@ export const TEACHER_ROUTES: Routes = [
       {
         path: 'profile',
         canActivate: [permissionGuard],
-        data: { permission: 'profile.view' },
-        loadChildren: () =>
-          import('../../features/profile/profile.routes').then((routes) => routes.PROFILE_ROUTES),
+        data: { permission: 'profile.view', topbarTitle: 'Mi informacion' },
+        loadComponent: () =>
+          import('../../features/profile/pages/teacher-profile/teacher-profile.component').then(
+            (component) => component.TeacherProfileComponent,
+          ),
       },
       {
         path: 'settings',

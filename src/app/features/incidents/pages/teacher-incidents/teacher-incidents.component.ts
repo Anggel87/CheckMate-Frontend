@@ -1,76 +1,101 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
 import { Router, RouterLink } from '@angular/router';
+import { EmptyStateComponent } from '../../../../shared/components/empty-state/empty-state.component';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
-import { ToastService } from '../../../../shared/feedback/services/toast.service';
+import {
+  StatusBadgeComponent,
+  StatusBadgeTone,
+} from '../../../../shared/components/status-badge/status-badge.component';
 import {
   TeacherIncidentView,
   TeacherPortalApiService,
 } from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
+type IncidentTab = 'ACTIVO' | 'RESUELTO' | 'CANCELADO' | 'TODOS';
+
+const TABS: { key: IncidentTab; label: string }[] = [
+  { key: 'ACTIVO', label: 'Activos' },
+  { key: 'RESUELTO', label: 'Resueltos' },
+  { key: 'CANCELADO', label: 'Cancelados' },
+  { key: 'TODOS', label: 'Todos' },
+];
+
 @Component({
   selector: 'app-teacher-incidents',
   standalone: true,
-  imports: [RouterLink, LoadingSpinnerComponent],
+  imports: [RouterLink, LoadingSpinnerComponent, StatusBadgeComponent, EmptyStateComponent],
   template: `
     <section class="teacher-page teacher-incidents-page">
-      <nav class="breadcrumbs" aria-label="Ruta de navegacion">
-        <span>CheckMate</span>
-        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-        <strong>Incidents</strong>
-      </nav>
-
       <header class="teacher-page__header teacher-page__header--filters">
         <div>
           <h1>Incidentes</h1>
+          <p>Reporta y da seguimiento a las emergencias de tus grupos.</p>
         </div>
+
+        <a class="btn-checkmate btn-checkmate-primary" [routerLink]="incidentBaseRoute() + '/new'">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          Nuevo incidente
+        </a>
       </header>
 
       @if (loading()) {
         <app-loading-spinner label="Cargando incidentes..." [showLabel]="true" />
       } @else {
-        <div class="teacher-incidents-layout">
-          <section
-            class="teacher-card teacher-incident-list-card"
-            aria-label="Historial de incidentes"
-          >
-            <header class="teacher-incident-list-card__toolbar">
-              <div class="teacher-filter-actions">
-                <button type="button" class="teacher-filter-button" (click)="showFilterInfo('fecha')">
-                  <i class="fa-regular fa-calendar" aria-hidden="true"></i>
-                  Filtro fecha
-                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                </button>
-                <button type="button" class="teacher-filter-button" (click)="showFilterInfo('tipo')">
-                  <i class="fa-solid fa-shapes" aria-hidden="true"></i>
-                  Filtro Tipo
-                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                </button>
-              </div>
-              <span class="teacher-sort-label">Sorting: <b>Recent First</b></span>
-            </header>
+        <section class="teacher-stats-grid" aria-label="Resumen de incidentes">
+          <article class="teacher-stat-card">
+            <span>Activos</span>
+            <strong>{{ countByStatus('ACTIVO') }}</strong>
+            <i class="fa-solid fa-triangle-exclamation is-danger" aria-hidden="true"></i>
+          </article>
+          <article class="teacher-stat-card">
+            <span>Resueltos</span>
+            <strong>{{ countByStatus('RESUELTO') }}</strong>
+            <i class="fa-regular fa-circle-check is-success" aria-hidden="true"></i>
+          </article>
+          <article class="teacher-stat-card">
+            <span>Cancelados</span>
+            <strong>{{ countByStatus('CANCELADO') }}</strong>
+            <i class="fa-regular fa-circle-xmark is-warning" aria-hidden="true"></i>
+          </article>
+        </section>
 
-            <div class="teacher-incident-list">
-              @for (incident of incidents(); track incident.id) {
-                <article
-                  class="teacher-incident-row"
-                  [class]="'teacher-incident-row tone-' + incident.tone"
-                >
-                  <span class="teacher-incident-row__icon">
+        <section class="teacher-table-card" aria-label="Historial de incidentes">
+          <div class="teacher-tabs">
+            @for (tab of tabs; track tab.key) {
+              <button type="button" [class.is-active]="activeTab() === tab.key" (click)="activeTab.set(tab.key)">
+                {{ tab.label }}
+              </button>
+            }
+          </div>
+
+          @if (filteredIncidents().length === 0) {
+            <app-empty-state
+              icon="fa-solid fa-triangle-exclamation"
+              title="Sin incidentes"
+              description="No hay incidentes registrados en esta categoria."
+            />
+          } @else {
+            <div class="teacher-table teacher-incidents-table">
+              <div class="teacher-table__row teacher-table__row--header">
+                <span>Fecha</span>
+                <span>Tipo</span>
+                <span>Titulo</span>
+                <span>Severidad</span>
+                <span>Estado</span>
+                <span>Accion</span>
+              </div>
+              @for (incident of filteredIncidents(); track incident.id) {
+                <div class="teacher-table__row">
+                  <span>{{ incident.date }}</span>
+                  <span>
                     <i [class]="incident.icon" aria-hidden="true"></i>
+                    {{ typeLabel(incident.type) }}
                   </span>
-                  <div>
-                    <h2>
-                      {{ incident.title }}
-                      <small>{{ incident.priority }}</small>
-                    </h2>
-                    <p>{{ incident.date }} • {{ incident.location }}</p>
-                  </div>
-                  <div class="teacher-incident-row__reporter">
-                    <span>Reportado por</span>
-                    <strong>{{ incident.reporter }}</strong>
-                  </div>
+                  <span>{{ incident.title }}</span>
+                  <app-status-badge [label]="incident.priority || 'No especificada'" [tone]="incident.tone" />
+                  <app-status-badge [label]="incident.status" [tone]="statusTone(incident.status)" />
                   <a
                     class="icon-button"
                     [routerLink]="[incidentBaseRoute(), incident.id]"
@@ -78,60 +103,11 @@ import {
                   >
                     <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                   </a>
-                </article>
-              } @empty {
-                <p class="dropdown-empty">No hay incidentes reportados.</p>
+                </div>
               }
             </div>
-
-            <a class="teacher-new-incident-button" [routerLink]="incidentBaseRoute() + '/new'">
-              <i class="fa-solid fa-plus" aria-hidden="true"></i>
-              Nuevo incidente
-            </a>
-          </section>
-
-          <aside class="teacher-side-stack" aria-label="Resumen de incidentes">
-            <article class="teacher-card teacher-map-card">
-              <div class="teacher-campus-map" aria-hidden="true">
-                <span class="teacher-campus-map__pin"></span>
-                <span class="teacher-live-badge"><i class="fa-solid fa-circle"></i> Live View</span>
-              </div>
-              <span>Ubicacion del ultimo incidente</span>
-              <strong>{{ lastIncidentLocation() || 'Sin incidentes activos' }}</strong>
-            </article>
-
-            <article class="teacher-card teacher-week-summary">
-              <h2>Resumen Semanal</h2>
-              <div class="teacher-week-summary__row">
-                <span class="is-critical"></span>
-                <div><strong>Criticos</strong><small>Requieren accion inmediata</small></div>
-                <b>{{ criticalCount() }}</b>
-              </div>
-              <div class="teacher-week-summary__row">
-                <span class="is-active"></span>
-                <div><strong>En Curso</strong><small>Siendo atendidos</small></div>
-                <b>{{ activeCount() }}</b>
-              </div>
-              <div class="teacher-week-summary__row">
-                <span class="is-muted"></span>
-                <div><strong>Resueltos</strong><small>Archivados hoy</small></div>
-                <b>{{ resolvedCount() }}</b>
-              </div>
-              <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="showWeeklyReport()">
-                Ver Reporte Completo
-              </button>
-            </article>
-
-            <article class="teacher-protocol-card">
-              <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
-              <h2>Protocolo de Emergencia</h2>
-              <p>Recuerda siempre evacuar antes de reportar un incidente de nivel 5.</p>
-              <a [routerLink]="incidentBaseRoute() + '/new'"
-                >Leer guia <i class="fa-solid fa-arrow-right"></i
-              ></a>
-            </article>
-          </aside>
-        </div>
+          }
+        </section>
       }
     </section>
   `,
@@ -139,11 +115,22 @@ import {
 export class TeacherIncidentsComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
-  private readonly toastService = inject(ToastService);
   private readonly teacherApi = inject(TeacherPortalApiService);
 
   protected readonly loading = signal(true);
   protected readonly incidents = signal<TeacherIncidentView[]>([]);
+  protected readonly activeTab = signal<IncidentTab>('ACTIVO');
+  protected readonly tabs = TABS;
+
+  protected readonly filteredIncidents = computed(() => {
+    const tab = this.activeTab();
+
+    if (tab === 'TODOS') {
+      return this.incidents();
+    }
+
+    return this.incidents().filter((incident) => incident.status.toUpperCase() === tab);
+  });
 
   constructor() {
     this.teacherApi
@@ -161,27 +148,32 @@ export class TeacherIncidentsComponent {
     return this.router.url.startsWith('/tutor') ? '/tutor/incidents' : '/teacher/incidents';
   }
 
-  protected showWeeklyReport(): void {
-    this.toastService.info('Reporte semanal', 'El resumen completo se generara con los datos actuales.');
+  protected countByStatus(status: string): number {
+    return this.incidents().filter((incident) => incident.status.toUpperCase() === status).length;
   }
 
-  protected showFilterInfo(filter: 'fecha' | 'tipo'): void {
-    this.toastService.info('Filtro aplicado', `Filtro por ${filter} preparado para la consulta.`);
+  protected statusTone(status: string): StatusBadgeTone {
+    const normalized = status.toUpperCase();
+
+    if (normalized === 'RESUELTO') {
+      return 'success';
+    }
+
+    if (normalized === 'CANCELADO') {
+      return 'neutral';
+    }
+
+    return 'danger';
   }
 
-  protected lastIncidentLocation(): string {
-    return this.incidents()[0]?.location ?? '';
-  }
+  protected typeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      FIRE: 'Incendio',
+      GAS: 'Gas',
+      EARTHQUAKE: 'Terremoto',
+      OTHER: 'Otro',
+    };
 
-  protected criticalCount(): number {
-    return this.incidents().filter((incident) => incident.tone === 'danger').length;
-  }
-
-  protected activeCount(): number {
-    return this.incidents().filter((incident) => incident.status.toUpperCase().includes('ACT')).length;
-  }
-
-  protected resolvedCount(): number {
-    return this.incidents().filter((incident) => incident.status.toUpperCase().includes('RES')).length;
+    return labels[type.toUpperCase()] ?? type;
   }
 }

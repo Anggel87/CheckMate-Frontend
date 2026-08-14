@@ -98,6 +98,12 @@ export class AuthService {
     return role ? ROUTE_PATHS.roleHome[role] : ROUTE_PATHS.login;
   }
 
+  updateProfileSummary(avatarUrl: string, shortName: string): void {
+    if (avatarUrl || shortName) {
+      this.sessionService.updateProfileSummary(avatarUrl, shortName);
+    }
+  }
+
   private toAuthenticatedUser(
     token: string,
     tokenType: string,

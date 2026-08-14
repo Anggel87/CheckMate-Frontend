@@ -5,10 +5,12 @@ import {
   formatApiDate,
   formatApiTime,
   initialsFromName,
+  readBoolean,
   readFirstString,
   readFullName,
   readId,
   readNumber,
+  readShortName,
   readString,
   toRecord,
   toneFromAttendanceStatus,
@@ -33,6 +35,30 @@ export interface TeacherClassView {
   countdown?: string;
   sessionId?: string;
 }
+
+export interface TeacherProfileView {
+  id: string;
+  name: string;
+  shortName: string;
+  role: string;
+  email: string;
+  phone: string;
+  address: string;
+  avatarUrl: string;
+  tutoredGroups: string[];
+}
+
+export const EMPTY_TEACHER_PROFILE: TeacherProfileView = {
+  id: '',
+  name: '',
+  shortName: '',
+  role: '',
+  email: '',
+  phone: '',
+  address: '',
+  avatarUrl: '/profile-avatar.svg',
+  tutoredGroups: [],
+};
 
 export interface TeacherGroupView {
   id: string;
@@ -69,7 +95,6 @@ export interface TeacherIncidentView {
   type: string;
   title: string;
   date: string;
-  location: string;
   reporter: string;
   priority: string;
   tone: StatusBadgeTone;
@@ -80,6 +105,7 @@ export interface TeacherIncidentView {
 }
 
 export interface TeacherIncidentDetailView extends TeacherIncidentView {
+  groups: string[];
   students: TeacherEmergencyStudentView[];
   history: TeacherTimelineItemView[];
 }
@@ -94,12 +120,14 @@ export interface TeacherEmergencyStudentView {
 export interface TeacherTimelineItemView {
   title: string;
   description: string;
+  actor: string;
   date: string;
 }
 
 export interface TeacherAttendanceHistoryView {
   id: string;
   date: string;
+  rawDate: string;
   subject: string;
   time: string;
   status: string;
@@ -115,6 +143,38 @@ export interface TeacherJustificationHistoryView {
   evidenceIcon: string;
 }
 
+export interface TeacherJustificationDetailView {
+  id: string;
+  subject: string;
+  date: string;
+  reason: string;
+  status: string;
+  statusTone: StatusBadgeTone;
+  evidenceUrl: string;
+  reviewedBy: string;
+  comment: string;
+}
+
+export const EMPTY_TEACHER_JUSTIFICATION_DETAIL: TeacherJustificationDetailView = {
+  id: '',
+  subject: '',
+  date: '',
+  reason: '',
+  status: '',
+  statusTone: 'neutral',
+  evidenceUrl: '',
+  reviewedBy: '',
+  comment: '',
+};
+
+export interface TeacherStudentTutorView {
+  id: string;
+  fullName: string;
+  phone: string;
+  relationship: string;
+  isPrimary: boolean;
+}
+
 export interface TeacherStudentProfileView {
   id: string;
   name: string;
@@ -123,12 +183,11 @@ export interface TeacherStudentProfileView {
   email: string;
   group: string;
   department: string;
-  tutor: string;
+  academicTutor: string;
+  tutors: TeacherStudentTutorView[];
   avatarUrl: string;
   attendance: number;
   justifications: string;
-  emergencyContact: string;
-  emergencyPhone: string;
 }
 
 export interface TeacherAttendanceContextView {
@@ -141,6 +200,16 @@ export interface TeacherIncidentPayload {
   title: string;
   description: string;
   severity: string;
+  groupIds: string[];
+  evidence?: File | null;
+}
+
+export interface TeacherIncidentUpdatePayload {
+  type: string;
+  title: string;
+  description: string;
+  severity: string;
+  groupIds?: string[];
   evidence?: File | null;
 }
 
@@ -152,12 +221,11 @@ export const EMPTY_TEACHER_STUDENT_PROFILE: TeacherStudentProfileView = {
   email: '',
   group: '',
   department: '',
-  tutor: '',
+  academicTutor: '',
+  tutors: [],
   avatarUrl: '/profile-avatar.svg',
   attendance: 0,
   justifications: '0',
-  emergencyContact: '',
-  emergencyPhone: '',
 };
 
 export const EMPTY_TEACHER_INCIDENT_DETAIL: TeacherIncidentDetailView = {
@@ -165,7 +233,6 @@ export const EMPTY_TEACHER_INCIDENT_DETAIL: TeacherIncidentDetailView = {
   type: '',
   title: '',
   date: '',
-  location: '',
   reporter: '',
   priority: '',
   tone: 'neutral',
@@ -173,6 +240,7 @@ export const EMPTY_TEACHER_INCIDENT_DETAIL: TeacherIncidentDetailView = {
   status: '',
   description: '',
   evidenceUrl: '',
+  groups: [],
   students: [],
   history: [],
 };
@@ -182,6 +250,32 @@ export const EMPTY_TEACHER_INCIDENT_DETAIL: TeacherIncidentDetailView = {
 })
 export class TeacherPortalApiService {
   private readonly api = inject(CheckmateApiService);
+
+  getProfile(): Observable<TeacherProfileView> {
+    return this.api.get<unknown>('/profesor/profile').pipe(
+      map((response) => this.toProfile(unwrapData(response))),
+    );
+  }
+
+  updateProfile(phone: string | null, photo: File | null): Observable<TeacherProfileView> {
+    const formData = new FormData();
+    // PHP nunca parsea multipart/form-data en peticiones PUT (solo en POST), asi
+    // que se manda como POST con _method=PUT (method spoofing) para que Laravel
+    // enrute al mismo controlador y el archivo se reciba correctamente.
+    formData.set('_method', 'PUT');
+
+    if (phone) {
+      formData.set('phone', phone);
+    }
+
+    if (photo) {
+      formData.set('photo', photo);
+    }
+
+    return this.api.post<unknown>('/profesor/profile', formData).pipe(
+      map((response) => this.toProfile(unwrapData(response))),
+    );
+  }
 
   getTodayClasses(): Observable<TeacherClassView[]> {
     return this.api.getCollection('/profesor/schedule/today', (item) => this.toClass(item));
@@ -276,18 +370,54 @@ export class TeacherPortalApiService {
     );
   }
 
-  createIncident(payload: TeacherIncidentPayload): Observable<boolean> {
+  createIncident(payload: TeacherIncidentPayload): Observable<TeacherIncidentDetailView> {
     const formData = new FormData();
     formData.set('type', payload.type);
-    formData.set('title', payload.title);
-    formData.set('description', payload.description);
-    formData.set('severity', payload.severity);
+
+    const title = payload.title.trim();
+    if (title) {
+      formData.set('title', title);
+    }
+
+    const description = payload.description.trim();
+    if (description) {
+      formData.set('description', description);
+    }
+
+    if (payload.severity) {
+      formData.set('severity', payload.severity);
+    }
+
+    payload.groupIds.forEach((groupId) => formData.append('group_ids[]', groupId));
 
     if (payload.evidence) {
       formData.set('evidence', payload.evidence);
     }
 
-    return this.api.post<unknown>('/profesor/incidents', formData).pipe(map(() => true));
+    return this.api
+      .post<unknown>('/profesor/incidents', formData)
+      .pipe(map((response) => this.toIncidentDetail(unwrapData(response))));
+  }
+
+  updateIncident(
+    incidentId: string,
+    payload: TeacherIncidentUpdatePayload,
+  ): Observable<TeacherIncidentDetailView> {
+    const formData = new FormData();
+    formData.set('_method', 'PUT');
+    formData.set('type', payload.type);
+    formData.set('title', payload.title);
+    formData.set('description', payload.description);
+    formData.set('severity', payload.severity);
+    (payload.groupIds ?? []).forEach((groupId) => formData.append('group_ids[]', groupId));
+
+    if (payload.evidence) {
+      formData.set('evidence', payload.evidence);
+    }
+
+    return this.api
+      .post<unknown>(`/profesor/incidents/${incidentId}`, formData)
+      .pipe(map((response) => this.toIncidentDetail(unwrapData(response))));
   }
 
   updateIncidentStudents(
@@ -350,6 +480,35 @@ export class TeacherPortalApiService {
     return this.api.getCollection(`/profesor/students/${studentId}/justifications`, (item) =>
       this.toJustificationHistory(item),
     );
+  }
+
+  getJustificationDetail(justificationId: string | null): Observable<TeacherJustificationDetailView> {
+    if (!justificationId) {
+      return of(EMPTY_TEACHER_JUSTIFICATION_DETAIL);
+    }
+
+    return this.api.get<unknown>(`/profesor/justifications/${justificationId}`).pipe(
+      map((response) => this.toJustificationDetail(unwrapData(response))),
+      catchError(() => of(EMPTY_TEACHER_JUSTIFICATION_DETAIL)),
+    );
+  }
+
+  private toProfile(value: unknown): TeacherProfileView {
+    const record = toRecord(value);
+    const role = readString(record, 'role');
+    const tutoredGroups = Array.isArray(record?.['tutored_groups']) ? record?.['tutored_groups'] : [];
+
+    return {
+      id: readId(record),
+      name: readFullName(record),
+      shortName: readShortName(record),
+      role: role === 'tutor_academico' ? 'Profesor tutor' : 'Profesor',
+      email: readString(record, 'email'),
+      phone: readString(record, 'phone'),
+      address: readString(record, 'address'),
+      avatarUrl: readFirstString(record, ['photo_url', 'avatar_url'], '/profile-avatar.svg'),
+      tutoredGroups: tutoredGroups.map((group) => this.groupLabel(toRecord(group))),
+    };
   }
 
   private toClass(value: unknown): TeacherClassView {
@@ -432,7 +591,6 @@ export class TeacherPortalApiService {
       type,
       title: readString(record, 'title', type),
       date: formatApiDate(readFirstString(record, ['created_at', 'date'])),
-      location: readString(record, 'location'),
       reporter: readFullName(reporter),
       priority: severity,
       tone: this.severityTone(severity),
@@ -446,11 +604,13 @@ export class TeacherPortalApiService {
   private toIncidentDetail(value: unknown): TeacherIncidentDetailView {
     const base = this.toIncident(value);
     const record = toRecord(value);
+    const groups = Array.isArray(record?.['groups']) ? record?.['groups'] : [];
     const students = Array.isArray(record?.['students']) ? record?.['students'] : [];
     const history = Array.isArray(record?.['history']) ? record?.['history'] : [];
 
     return {
       ...base,
+      groups: groups.map((item) => this.groupLabel(toRecord(item))),
       students: students.map((item) => this.toEmergencyStudent(item)),
       history: history.map((item) => this.toTimelineItem(item)),
     };
@@ -458,8 +618,8 @@ export class TeacherPortalApiService {
 
   private toEmergencyStudent(value: unknown): TeacherEmergencyStudentView {
     const record = toRecord(value);
-    const presentValue = record?.['present'];
-    const status = presentValue === true ? 'PRESENTE' : presentValue === false ? 'AUSENTE' : '';
+    const rawStatus = readString(record, 'status');
+    const status = rawStatus === 'PRESENTE' || rawStatus === 'AUSENTE' ? rawStatus : '';
 
     return {
       id: readId(record),
@@ -473,20 +633,114 @@ export class TeacherPortalApiService {
     const record = toRecord(value);
     const performedBy = toRecord(record?.['performed_by']);
     const action = readString(record, 'action');
+    const before = toRecord(record?.['before']);
+    const after = toRecord(record?.['after']);
+    const createdAt = readString(record, 'created_at');
 
     return {
-      title: action,
-      description: readFullName(performedBy),
-      date: formatApiDate(readString(record, 'created_at')),
+      title: action === 'CREATE' ? 'Incidente creado' : 'Incidente actualizado',
+      description: this.historyChangeSummary(before, after),
+      actor: readFullName(performedBy),
+      date: [formatApiDate(createdAt), formatApiTime(createdAt)].filter(Boolean).join(' · '),
     };
+  }
+
+  private historyChangeSummary(
+    before: Record<string, unknown> | null,
+    after: Record<string, unknown> | null,
+  ): string {
+    if (!after) {
+      return 'Sin detalle disponible.';
+    }
+
+    const keys = Object.keys(after);
+
+    if (keys.includes('student_id') && keys.includes('status')) {
+      return `Alumno #${String(after['student_id'])}: ${this.historyValueLabel('status', after['status'])}.`;
+    }
+
+    if (!before) {
+      return keys
+        .filter((key) => key !== 'status')
+        .map((key) => `${this.historyFieldLabel(key)}: ${this.historyValueLabel(key, after[key])}`)
+        .join(' · ');
+    }
+
+    const changes = keys
+      .filter((key) => before[key] !== after[key])
+      .map(
+        (key) =>
+          `${this.historyFieldLabel(key)}: ${this.historyValueLabel(key, before[key])} → ${this.historyValueLabel(key, after[key])}`,
+      );
+
+    return changes.length ? changes.join(' · ') : 'Sin cambios detectados.';
+  }
+
+  private historyFieldLabel(key: string): string {
+    const labels: Record<string, string> = {
+      type: 'Tipo',
+      title: 'Titulo',
+      description: 'Descripcion',
+      severity: 'Severidad',
+      evidence: 'Evidencia',
+      status: 'Estado',
+    };
+
+    return labels[key] ?? key;
+  }
+
+  private historyValueLabel(key: string, value: unknown): string {
+    if (value === null || value === undefined || value === '') {
+      return key === 'severity' ? 'No especificada' : 'Sin definir';
+    }
+
+    const text = String(value);
+
+    if (key === 'type') {
+      return this.typeLabel(text);
+    }
+
+    if (key === 'status') {
+      const labels: Record<string, string> = {
+        DESCONOCIDO: 'Sin verificar',
+        PRESENTE: 'Presente',
+        AUSENTE: 'Ausente',
+        EXTRAVIADO: 'Extraviado',
+        SEGURO: 'A salvo',
+      };
+
+      return labels[text.toUpperCase()] ?? text;
+    }
+
+    if (key === 'evidence') {
+      return 'Archivo actualizado';
+    }
+
+    if ((key === 'title' || key === 'description') && text.length > 60) {
+      return `${text.slice(0, 57)}...`;
+    }
+
+    return text;
+  }
+
+  private typeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      FIRE: 'Incendio',
+      GAS: 'Gas',
+      EARTHQUAKE: 'Terremoto',
+      OTHER: 'Otro',
+    };
+
+    return labels[type.toUpperCase()] ?? type;
   }
 
   private toStudentProfile(value: unknown, fallbackId: string): TeacherStudentProfileView {
     const record = toRecord(value);
     const group = toRecord(record?.['group']);
     const career = toRecord(group?.['career']) ?? toRecord(record?.['career']);
-    const tutors = Array.isArray(record?.['tutors']) ? record?.['tutors'] : [];
-    const tutor = toRecord(tutors[0]);
+    const rawTutors = Array.isArray(record?.['tutors']) ? record?.['tutors'] : [];
+    const tutors = rawTutors.map((item) => this.toStudentTutor(item));
+    const academicTutor = toRecord(record?.['academic_tutor']);
     const name = readFullName(record);
 
     return {
@@ -497,12 +751,23 @@ export class TeacherPortalApiService {
       email: readString(record, 'email'),
       group: this.groupLabel(group),
       department: readFirstString(career, ['short_name', 'name']),
-      tutor: readFullName(tutor),
+      academicTutor: readFullName(academicTutor),
+      tutors,
       avatarUrl: readFirstString(record, ['photo_url', 'avatar_url'], '/profile-avatar.svg'),
       attendance: readNumber(record, 'attendance_rate', 0),
       justifications: '0',
-      emergencyContact: readFullName(tutor),
-      emergencyPhone: readString(tutor, 'phone'),
+    };
+  }
+
+  private toStudentTutor(value: unknown): TeacherStudentTutorView {
+    const record = toRecord(value);
+
+    return {
+      id: readId(record, ''),
+      fullName: readString(record, 'full_name'),
+      phone: readString(record, 'phone'),
+      relationship: readString(record, 'relationship'),
+      isPrimary: readBoolean(record, 'is_primary', false),
     };
   }
 
@@ -516,6 +781,7 @@ export class TeacherPortalApiService {
     return {
       id: readFirstString(record, ['attendance_id', 'id']),
       date: formatApiDate(rawDate),
+      rawDate,
       subject: readString(subject, 'name', readString(record, 'subject')),
       time: formatApiTime(readFirstString(record, ['registered_at', 'created_at'])) || readString(schedule, 'start_time'),
       status: this.attendanceStatusLabel(rawStatus),
@@ -535,6 +801,25 @@ export class TeacherPortalApiService {
       typeTone: toneFromRequestStatus(status),
       subject: readString(subject, 'name', readString(record, 'subject')),
       evidenceIcon: readString(record, 'evidence_url') ? 'fa-regular fa-file-lines' : 'fa-regular fa-file',
+    };
+  }
+
+  private toJustificationDetail(value: unknown): TeacherJustificationDetailView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const reviewedBy = toRecord(record?.['reviewed_by']);
+    const status = readString(record, 'status');
+
+    return {
+      id: readId(record),
+      subject: readString(subject, 'name'),
+      date: formatApiDate(readString(record, 'date')),
+      reason: readFirstString(record, ['reason', 'description'], 'Sin motivo registrado.'),
+      status: this.requestStatusLabel(status),
+      statusTone: toneFromRequestStatus(status),
+      evidenceUrl: readString(record, 'evidence_url'),
+      reviewedBy: readFullName(reviewedBy),
+      comment: readString(record, 'comment'),
     };
   }
 

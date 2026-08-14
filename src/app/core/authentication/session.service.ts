@@ -16,6 +16,25 @@ export class SessionService {
     this.storageService.setSession(STORAGE_KEYS.authUser, user);
   }
 
+  updateProfileSummary(avatarUrl: string, shortName: string): void {
+    const user = this.currentUser();
+
+    if (!user) {
+      return;
+    }
+
+    const nextAvatarUrl = avatarUrl || user.avatarUrl;
+    const nextShortName = shortName || user.shortName;
+
+    if (user.avatarUrl === nextAvatarUrl && user.shortName === nextShortName) {
+      return;
+    }
+
+    const updated = { ...user, avatarUrl: nextAvatarUrl, shortName: nextShortName };
+    this.currentUser.set(updated);
+    this.storageService.setSession(STORAGE_KEYS.authUser, updated);
+  }
+
   clear(): void {
     this.currentUser.set(null);
     this.storageService.removeSession(STORAGE_KEYS.authUser);

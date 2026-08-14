@@ -66,6 +66,14 @@ export interface ManagementJustification {
   status: ManagementStatus;
 }
 
+export interface ManagementTutor {
+  id: string;
+  fullName: string;
+  phone: string;
+  relationship: string;
+  isPrimary: boolean;
+}
+
 export interface ManagementStudent {
   id: string;
   controlNumber: string;
@@ -74,7 +82,9 @@ export interface ManagementStudent {
   career: string;
   email: string;
   phone: string;
+  address: string;
   tutorName: string;
+  tutors: ManagementTutor[];
   status: ManagementStatus;
   attendanceRate: number;
   level: string;
@@ -141,11 +151,14 @@ export interface DeviceCreatePayload {
   classroomId: string;
 }
 
+export type IncidentRosterStatus = 'DESCONOCIDO' | 'PRESENTE' | 'EXTRAVIADO' | 'AUSENTE' | 'SEGURO';
+
 export interface ManagementIncidentRosterItem {
   studentId: string;
   name: string;
   controlNumber: string;
-  status: 'PRESENTE' | 'AUSENTE' | 'DESCONOCIDO';
+  status: IncidentRosterStatus;
+  notes: string;
 }
 
 export interface ManagementIncidentHistoryItem {
@@ -161,7 +174,7 @@ export interface ManagementIncident {
   type: string;
   severity: ManagementStatus;
   status: ManagementStatus;
-  location: string;
+  groups: string[];
   reportedBy: string;
   date: string;
   description: string;
@@ -223,9 +236,16 @@ export interface IncidentCreatePayload {
   description: string;
   type: string;
   severity: string;
-  location: string;
   scheduleId: string;
   studentIds: string[];
+  evidence: File | null;
+}
+
+export interface IncidentUpdatePayload {
+  title: string;
+  description: string;
+  type: string;
+  severity: string;
   evidence: File | null;
 }
 

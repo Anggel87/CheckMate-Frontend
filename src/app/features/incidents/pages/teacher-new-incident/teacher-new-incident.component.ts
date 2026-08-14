@@ -1,9 +1,10 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
+import { FileUploadComponent } from '../../../../shared/components/file-upload/file-upload.component';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import {
@@ -12,9 +13,9 @@ import {
   markFormGroupTouched,
 } from '../../../../shared/utils/form.utils';
 import { apiErrorMessage, apiFieldErrors } from '../../../../shared/utils/api-error.util';
-import { TeacherPortalApiService } from '../../../teacher-portal/data-access/teacher-portal-api.service';
+import { TeacherGroupView, TeacherPortalApiService } from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
-type TeacherIncidentControl = 'incidentType' | 'title' | 'description' | 'severity' | 'location';
+type TeacherIncidentControl = 'incidentType' | 'title' | 'description' | 'severity';
 
 const INCIDENT_TYPES = [
   {
@@ -38,20 +39,27 @@ const INCIDENT_TYPES = [
     icon: 'fa-solid fa-wave-square',
     tone: 'neutral',
   },
+  {
+    value: 'OTHER',
+    label: 'Otro',
+    subtitle: 'Otra emergencia',
+    icon: 'fa-solid fa-circle-info',
+    tone: 'neutral',
+  },
 ] as const;
 
 @Component({
   selector: 'app-teacher-new-incident',
   standalone: true,
-  imports: [ReactiveFormsModule, FormValidationMessageComponent],
+  imports: [ReactiveFormsModule, FormValidationMessageComponent, FileUploadComponent],
   template: `
     <section class="teacher-page teacher-new-incident-page">
       <header class="teacher-page__header">
         <div>
           <h1>Reportar Nuevo Incidente</h1>
           <p>
-            Por favor, seleccione el tipo de emergencia para una respuesta inmediata. El sistema
-            notificara automaticamente a los servicios correspondientes.
+            Selecciona el tipo de emergencia y los grupos afectados para generar la lista de
+            verificacion de alumnos.
           </p>
         </div>
       </header>
@@ -68,6 +76,11 @@ const INCIDENT_TYPES = [
               [attr.aria-pressed]="form.controls.incidentType.value === type.value"
               (click)="selectType(type.value)"
             >
+              @if (form.controls.incidentType.value === type.value) {
+                <span class="teacher-emergency-type-card__check" aria-hidden="true">
+                  <i class="fa-solid fa-check"></i>
+                </span>
+              }
               <span><i [class]="type.icon" aria-hidden="true"></i></span>
               <strong>{{ type.label }}</strong>
               <small>{{ type.subtitle }}</small>
@@ -75,121 +88,119 @@ const INCIDENT_TYPES = [
           }
         </fieldset>
 
-        <div class="teacher-form-layout">
-          <section class="teacher-card teacher-incident-form-card">
-            <h2>
-              <i class="fa-solid fa-list-check" aria-hidden="true"></i> Detalles del Incidente
-            </h2>
+        <section class="teacher-card teacher-incident-form-card">
+          <h2>
+            <i class="fa-solid fa-list-check" aria-hidden="true"></i> Detalles del Incidente
+          </h2>
 
-            <label class="teacher-form-field" for="incident-title">
-              <span class="checkmate-label">Titulo del incidente <span>*</span></span>
-              <input
-                id="incident-title"
-                class="checkmate-input"
-                type="text"
-                placeholder="Ej: Fuga de gas detectada en ala norte"
-                formControlName="title"
-                [class.is-invalid]="errorFor('title', 'Titulo del incidente')"
-                aria-describedby="incident-title-error"
-              />
-              <app-form-validation-message
-                id="incident-title-error"
-                [message]="errorFor('title', 'Titulo del incidente')"
-              />
-            </label>
+          <label class="teacher-form-field" for="incident-title">
+            <span class="checkmate-label">Titulo del incidente</span>
+            <input
+              id="incident-title"
+              class="checkmate-input"
+              type="text"
+              placeholder="Ej: Fuga de gas detectada en ala norte"
+              formControlName="title"
+              [class.is-invalid]="errorFor('title', 'Titulo del incidente')"
+              aria-describedby="incident-title-error"
+            />
+            <p class="teacher-help-note">
+              Si no hay tiempo de escribirlo, dejalo en blanco: se genera uno automatico con la
+              fecha.
+            </p>
+            <app-form-validation-message
+              id="incident-title-error"
+              [message]="errorFor('title', 'Titulo del incidente')"
+            />
+          </label>
 
-            <label class="teacher-form-field" for="incident-description">
-              <span class="checkmate-label">Descripcion <span>*</span></span>
-              <textarea
-                id="incident-description"
-                class="checkmate-textarea"
-                placeholder="Describa la situacion con el mayor detalle posible..."
-                formControlName="description"
-                [class.is-invalid]="errorFor('description', 'Descripcion')"
-                aria-describedby="incident-description-error"
-              ></textarea>
-              <app-form-validation-message
-                id="incident-description-error"
-                [message]="errorFor('description', 'Descripcion')"
-              />
-            </label>
+          <label class="teacher-form-field" for="incident-description">
+            <span class="checkmate-label">Descripcion (opcional)</span>
+            <textarea
+              id="incident-description"
+              class="checkmate-textarea"
+              placeholder="Describa la situacion con el mayor detalle posible..."
+              formControlName="description"
+              [class.is-invalid]="errorFor('description', 'Descripcion')"
+              aria-describedby="incident-description-error"
+            ></textarea>
+            <app-form-validation-message
+              id="incident-description-error"
+              [message]="errorFor('description', 'Descripcion')"
+            />
+          </label>
 
-            <div class="teacher-form-grid">
-              <label class="teacher-form-field" for="incident-severity">
-                <span class="checkmate-label">Severidad <span>*</span></span>
-                <select
-                  id="incident-severity"
-                  class="checkmate-select"
-                  formControlName="severity"
-                  [class.is-invalid]="errorFor('severity', 'Severidad')"
-                  aria-describedby="incident-severity-error"
-                >
-                  <option value="CRITICA">Critica</option>
-                  <option value="ALTA">Alta</option>
-                  <option value="MEDIA">Media</option>
-                  <option value="BAJA">Baja</option>
-                </select>
-                <app-form-validation-message
-                  id="incident-severity-error"
-                  [message]="errorFor('severity', 'Severidad')"
-                />
-              </label>
+          <label class="teacher-form-field" for="incident-severity">
+            <span class="checkmate-label">Severidad (opcional)</span>
+            <select
+              id="incident-severity"
+              class="checkmate-select"
+              formControlName="severity"
+              [class.is-invalid]="errorFor('severity', 'Severidad')"
+              aria-describedby="incident-severity-error"
+            >
+              <option value="">No especificada</option>
+              <option value="CRITICA">Critica</option>
+              <option value="ALTA">Alta</option>
+              <option value="MEDIA">Media</option>
+              <option value="BAJA">Baja</option>
+            </select>
+            <app-form-validation-message
+              id="incident-severity-error"
+              [message]="errorFor('severity', 'Severidad')"
+            />
+          </label>
 
-              <label class="teacher-form-field" for="incident-location">
-                <span class="checkmate-label">Ubicacion especifica <span>*</span></span>
-                <input
-                  id="incident-location"
-                  class="checkmate-input"
-                  type="text"
-                  placeholder="Ej: Laboratorio 4, Piso 2"
-                  formControlName="location"
-                  [class.is-invalid]="errorFor('location', 'Ubicacion especifica')"
-                  aria-describedby="incident-location-error"
-                />
-                <app-form-validation-message
-                  id="incident-location-error"
-                  [message]="errorFor('location', 'Ubicacion especifica')"
-                />
-              </label>
-            </div>
-
-            <button type="submit" class="teacher-jump-button" [disabled]="saving()">
-              @if (saving()) {
-                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                Registrando...
-              } @else {
-                <i class="fa-solid fa-list" aria-hidden="true"></i>
-                Saltar a lista
+          <div class="teacher-form-field">
+            <span class="checkmate-label">Grupos afectados (opcional)</span>
+            <p class="teacher-help-note">
+              Se generara la lista de verificacion con los alumnos activos de los grupos que
+              selecciones. Si no seleccionas ninguno ahora, podras agregarlos despues editando
+              el incidente.
+            </p>
+            <div class="teacher-checkbox-list">
+              @for (group of groups(); track group.id) {
+                <label class="checkmate-checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="isGroupSelected(group.id)"
+                    (change)="toggleGroup(group.id)"
+                  />
+                  <span>{{ group.group }} - {{ group.career }}</span>
+                </label>
+              } @empty {
+                <p class="dropdown-empty">No tienes grupos activos asignados.</p>
               }
-            </button>
-          </section>
+            </div>
+          </div>
 
-          <aside class="teacher-side-stack">
-            <article class="teacher-card teacher-emergency-protocol-box">
-              <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i></span>
-              <h2>Protocolo de Emergencia</h2>
-              <p>
-                Al reportar un incidente critico, asegurese de evacuar el area antes de completar
-                los detalles secundarios.
-              </p>
-              <ul>
-                <li>Identifique el tipo de riesgo.</li>
-                <li>Defina la severidad actual.</li>
-                <li>Especifique el lugar exacto.</li>
-              </ul>
-            </article>
+          <div class="teacher-form-field">
+            <span class="checkmate-label">Evidencia</span>
+            <app-file-upload
+              title="Haz clic para subir una foto o documento"
+              description="JPG, PNG o PDF, maximo 5MB."
+              accept="image/png,image/jpeg,application/pdf"
+              [maxSizeMb]="5"
+              (filesSelected)="selectEvidence($event)"
+              (fileRemoved)="clearEvidence()"
+            />
+          </div>
 
-            <figure class="teacher-monitor-card">
-              <img src="/img/lp/Lp3.webp" alt="Centro de monitoreo de seguridad en vivo" />
-              <figcaption>Monitoreo en vivo activado</figcaption>
-            </figure>
-          </aside>
-        </div>
+          <button type="submit" class="teacher-jump-button" [disabled]="saving()">
+            @if (saving()) {
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+              Registrando...
+            } @else {
+              <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+              Registrar incidente
+            }
+          </button>
+        </section>
       </form>
     </section>
   `,
 })
-export class TeacherNewIncidentComponent {
+export class TeacherNewIncidentComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
@@ -198,16 +209,46 @@ export class TeacherNewIncidentComponent {
 
   protected readonly saving = signal(false);
   protected readonly incidentTypes = INCIDENT_TYPES;
+  protected readonly groups = signal<TeacherGroupView[]>([]);
+  protected readonly selectedGroupIds = signal<string[]>([]);
+  private evidence: File | null = null;
+
   protected readonly form = this.formBuilder.nonNullable.group({
     incidentType: ['FIRE', Validators.required],
-    title: ['', [Validators.required, Validators.maxLength(120)]],
-    description: ['', [Validators.required, Validators.maxLength(500)]],
-    severity: ['CRITICA', Validators.required],
-    location: ['', [Validators.required, Validators.maxLength(160)]],
+    title: ['', [Validators.maxLength(120)]],
+    description: ['', [Validators.maxLength(500)]],
+    severity: ['', []],
   });
+
+  ngOnInit(): void {
+    this.teacherApi
+      .getGroups()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((groups) => this.groups.set(groups));
+  }
 
   protected selectType(value: (typeof INCIDENT_TYPES)[number]['value']): void {
     this.form.controls.incidentType.setValue(value);
+  }
+
+  protected isGroupSelected(groupId: string): boolean {
+    return this.selectedGroupIds().includes(groupId);
+  }
+
+  protected toggleGroup(groupId: string): void {
+    this.selectedGroupIds.update((current) =>
+      current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId],
+    );
+  }
+
+  protected selectEvidence(files: File[]): void {
+    this.evidence = files[0] ?? null;
+  }
+
+  protected clearEvidence(): void {
+    this.evidence = null;
   }
 
   protected errorFor(controlName: TeacherIncidentControl, label: string): string {
@@ -228,8 +269,10 @@ export class TeacherNewIncidentComponent {
       .createIncident({
         type: value.incidentType,
         title: value.title,
-        description: `${value.description}\nUbicacion reportada: ${value.location}`,
+        description: value.description,
         severity: value.severity,
+        groupIds: this.selectedGroupIds(),
+        evidence: this.evidence,
       })
       .pipe(
         finalize(() => this.saving.set(false)),

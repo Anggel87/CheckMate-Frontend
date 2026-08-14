@@ -10,6 +10,7 @@ import {
   readFullName,
   readId,
   readNumber,
+  readShortName,
   readString,
   toRecord,
   toneFromAttendanceStatus,
@@ -23,6 +24,7 @@ export type StudentAttendanceTone = 'present' | 'late' | 'absent' | 'justified';
 
 export interface StudentProfileView {
   name: string;
+  shortName: string;
   role: string;
   enrollment: string;
   groupCareer: string;
@@ -185,6 +187,7 @@ const STUDENT_QUICK_ACTIONS: readonly StudentQuickAction[] = [
 
 export const EMPTY_STUDENT_PROFILE: StudentProfileView = {
   name: '',
+  shortName: '',
   role: 'Alumno',
   enrollment: '',
   groupCareer: '',
@@ -239,6 +242,26 @@ export class StudentPortalApiService {
 
   getProfile(): Observable<StudentProfileView> {
     return this.api.get<unknown>('/alumno/profile').pipe(
+      map((response) => this.toProfile(unwrapData(response))),
+    );
+  }
+
+  updateProfile(phone: string | null, photo: File | null): Observable<StudentProfileView> {
+    const formData = new FormData();
+    // PHP nunca parsea multipart/form-data en peticiones PUT (solo en POST), asi
+    // que se manda como POST con _method=PUT (method spoofing) para que Laravel
+    // enrute al mismo controlador y el archivo se reciba correctamente.
+    formData.set('_method', 'PUT');
+
+    if (phone) {
+      formData.set('phone', phone);
+    }
+
+    if (photo) {
+      formData.set('photo', photo);
+    }
+
+    return this.api.post<unknown>('/alumno/profile', formData).pipe(
       map((response) => this.toProfile(unwrapData(response))),
     );
   }
@@ -436,11 +459,13 @@ export class StudentPortalApiService {
     const tutors = Array.isArray(record?.['tutors']) ? record?.['tutors'] : [];
     const primaryTutor = toRecord(tutors[0]);
     const name = readFullName(record);
+    const shortName = readShortName(record);
     const groupLabel = this.groupLabel(group);
     const careerName = readFirstString(career, ['short_name', 'name']);
 
     return {
       name,
+      shortName,
       role: 'Alumno',
       enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']),
       groupCareer: [groupLabel, careerName].filter(Boolean).join(' | '),

@@ -10,6 +10,7 @@ export interface AuthenticatedUser {
   token?: string;
   tokenType?: string;
   avatarUrl?: string;
+  shortName?: string;
   career?: string;
   group?: string;
 }

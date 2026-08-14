@@ -114,6 +114,21 @@ export function readFullName(record: UnknownRecord | null | undefined, fallback 
   return parts.length ? parts.join(' ') : fallback;
 }
 
+export function readShortName(record: UnknownRecord | null | undefined, fallback = ''): string {
+  const firstName = readString(record, 'first_name');
+  const firstSurname = readString(record, 'first_surname');
+
+  if (firstName || firstSurname) {
+    return [firstName, firstSurname].filter(Boolean).join(' ');
+  }
+
+  const direct = readFirstString(record, ['full_name', 'name']);
+
+  return direct
+    ? direct.split(' ').filter(Boolean).slice(0, 2).join(' ')
+    : fallback;
+}
+
 export function initialsFromName(name: string): string {
   return name
     .split(' ')

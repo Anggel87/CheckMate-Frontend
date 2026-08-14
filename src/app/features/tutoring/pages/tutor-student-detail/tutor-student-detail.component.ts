@@ -1,7 +1,8 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import { TutoringDataService } from '../../data-access/tutoring-data.service';
+import { TutorAttendanceStatus } from '../../models/tutoring.model';
 
 @Component({
   selector: 'app-tutor-student-detail',
@@ -59,25 +60,24 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
       <nav class="teacher-profile-tabs" aria-label="Secciones del alumno">
         <a class="is-active" [routerLink]="['/tutor/students', student().id]">Asistencias</a>
         <a [routerLink]="['/tutor/students', student().id, 'justifications']">Justificantes</a>
-        <button type="button">Calificaciones</button>
       </nav>
 
       <div class="teacher-profile-layout">
         <div class="teacher-profile-main">
           <section class="teacher-card teacher-attendance-calendar-small">
             <header>
-              <h2>Historial de Asistencia - Octubre</h2>
+              <h2>Historial de Asistencia - {{ monthLabel() }}</h2>
               <div>
-                <button type="button" class="icon-button" aria-label="Mes anterior">
+                <button type="button" class="icon-button" aria-label="Mes anterior" (click)="goToPreviousMonth()">
                   <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
                 </button>
-                <button type="button" class="icon-button" aria-label="Mes siguiente">
+                <button type="button" class="icon-button" aria-label="Mes siguiente" (click)="goToNextMonth()">
                   <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
                 </button>
               </div>
             </header>
             <div class="teacher-mini-calendar" aria-label="Calendario de asistencia">
-              @for (day of calendarDays; track day.number) {
+              @for (day of calendarDays(); track $index) {
                 <span [class]="day.className">{{ day.number }}</span>
               }
             </div>
@@ -163,23 +163,81 @@ export class TutorStudentDetailComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly tutoringData = inject(TutoringDataService);
 
+  protected readonly viewYear = signal(new Date().getFullYear());
+  protected readonly viewMonth = signal(new Date().getMonth());
+
   protected readonly student = computed(() =>
     this.tutoringData.studentById(this.route.snapshot.paramMap.get('studentId')),
   );
-  protected readonly calendarDays = [
-    { number: '1', className: 'is-present' },
-    { number: '2', className: 'is-present' },
-    { number: '3', className: 'is-absent' },
-    { number: '4', className: 'is-present' },
-    { number: '5', className: 'is-present' },
-    { number: '6', className: '' },
-    { number: '7', className: '' },
-    { number: '8', className: 'is-present' },
-    { number: '9', className: 'is-present' },
-    { number: '10', className: 'is-present' },
-    { number: '11', className: 'is-absent' },
-    { number: '12', className: 'is-present' },
-    { number: '13', className: '' },
-    { number: '14', className: '' },
-  ];
+
+  protected readonly monthLabel = computed(() => {
+    const label = new Intl.DateTimeFormat('es-MX', { month: 'long', year: 'numeric' }).format(
+      new Date(this.viewYear(), this.viewMonth(), 1),
+    );
+
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  });
+
+  protected readonly calendarDays = computed(() => {
+    const year = this.viewYear();
+    const month = this.viewMonth();
+    const records = this.tutoringData.attendanceForStudent(this.student().id);
+    const statusByDay = new Map<number, string>();
+
+    records.forEach((record) => {
+      if (!record.rawDate) {
+        return;
+      }
+
+      const parsed = new Date(record.rawDate);
+
+      if (
+        !Number.isNaN(parsed.getTime()) &&
+        parsed.getFullYear() === year &&
+        parsed.getMonth() === month
+      ) {
+        statusByDay.set(parsed.getDate(), this.dayClassName(record.status));
+      }
+    });
+
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const leadingDays = new Date(year, month, 1).getDay();
+    const days: { number: string; className: string }[] = [];
+
+    for (let index = 0; index < leadingDays; index += 1) {
+      days.push({ number: '', className: 'is-empty' });
+    }
+
+    for (let day = 1; day <= totalDays; day += 1) {
+      days.push({ number: String(day), className: statusByDay.get(day) ?? '' });
+    }
+
+    return days;
+  });
+
+  protected goToPreviousMonth(): void {
+    this.shiftMonth(-1);
+  }
+
+  protected goToNextMonth(): void {
+    this.shiftMonth(1);
+  }
+
+  private shiftMonth(delta: number): void {
+    const date = new Date(this.viewYear(), this.viewMonth() + delta, 1);
+    this.viewYear.set(date.getFullYear());
+    this.viewMonth.set(date.getMonth());
+  }
+
+  private dayClassName(status: TutorAttendanceStatus): string {
+    if (status === 'Inasistencia') {
+      return 'is-absent';
+    }
+
+    if (status === 'Justificado') {
+      return 'is-muted';
+    }
+
+    return 'is-present';
+  }
 }

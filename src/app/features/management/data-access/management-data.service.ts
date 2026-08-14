@@ -9,6 +9,8 @@ import {
   DeviceCreatePayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
+  IncidentRosterStatus,
+  IncidentUpdatePayload,
   ManagementActionResult,
   ManagementAuditLog,
   ManagementCharts,
@@ -17,6 +19,8 @@ import {
   ManagementDevice,
   ManagementGroup,
   ManagementIncident,
+  ManagementIncidentHistoryItem,
+  ManagementIncidentRosterItem,
   ManagementJustification,
   ManagementSchedule,
   ManagementSnapshot,
@@ -24,9 +28,16 @@ import {
   ManagementStudent,
   ManagementSubject,
   ManagementTeacher,
+  ManagementTutor,
 } from '../models/management.model';
 
 type UnknownRecord = Record<string, unknown>;
+
+export interface ManagementStudentActionResult {
+  success: boolean;
+  message: string | null;
+  student: ManagementStudent | null;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -165,6 +176,24 @@ export class ManagementDataService {
     );
   }
 
+  getIncident(incidentId: string): Observable<ManagementIncident> {
+    return this.checkmateApi.get<unknown>(`${this.directorBase()}/incidents/${incidentId}`).pipe(
+      map((response) => this.toIncident(unwrapData(response), 0)),
+    );
+  }
+
+  getGroupSchedule(groupId: string): Observable<ManagementSchedule[]> {
+    return this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
+      this.toSchedule(item, index),
+    );
+  }
+
+  getGroupStudentsForIncident(groupId: string): Observable<ManagementStudent[]> {
+    return this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
+      this.toStudent(item, index),
+    );
+  }
+
   getClaims(): Observable<ManagementClaim[]> {
     if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
       return this.checkmateApi.getCollection(`${this.directorBase()}/claims`, (item, index) =>
@@ -208,7 +237,6 @@ export class ManagementDataService {
     formData.set('description', payload.description);
     formData.set('type', payload.type);
     formData.set('severity', payload.severity);
-    formData.set('location', payload.location);
     formData.set('schedule_id', payload.scheduleId);
     payload.studentIds.forEach((studentId) => formData.append('student_ids[]', studentId));
 
@@ -217,6 +245,24 @@ export class ManagementDataService {
     }
 
     return this.checkmateApi.post<unknown>(`${this.directorBase()}/incidents`, formData).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  updateIncident(incidentId: string, payload: IncidentUpdatePayload): Observable<ManagementActionResult> {
+    const formData = new FormData();
+    formData.set('_method', 'PUT');
+    formData.set('title', payload.title);
+    formData.set('description', payload.description);
+    formData.set('type', payload.type);
+    formData.set('severity', payload.severity);
+
+    if (payload.evidence) {
+      formData.set('evidence', payload.evidence);
+    }
+
+    return this.checkmateApi.post<unknown>(`${this.directorBase()}/incidents/${incidentId}`, formData).pipe(
       map(() => ({ success: true, message: null })),
       catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
     );
@@ -231,13 +277,13 @@ export class ManagementDataService {
       );
   }
 
-  updateIncidentStudents(incident: ManagementIncident, notes: string): Observable<ManagementActionResult> {
+  updateIncidentStudents(incidentId: string, roster: ManagementIncidentRosterItem[]): Observable<ManagementActionResult> {
     return this.checkmateApi
-      .patch<unknown>(`${this.directorBase()}/incidents/${incident.id}/students`, {
-        students: incident.roster.map((item) => ({
+      .patch<unknown>(`${this.directorBase()}/incidents/${incidentId}/students`, {
+        students: roster.map((item) => ({
           student_id: item.studentId,
           status: item.status,
-          notes,
+          notes: item.notes || undefined,
         })),
       })
       .pipe(
@@ -296,6 +342,96 @@ export class ManagementDataService {
         map(() => ({ success: true, message: null })),
         catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
       );
+  }
+
+  updateStudent(
+    studentId: string,
+    payload: { phone?: string; address?: string; active?: boolean; photo?: File | null },
+  ): Observable<ManagementStudentActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.', student: null });
+    }
+
+    const formData = new FormData();
+    // PHP no parsea multipart/form-data en peticiones PUT (solo en POST), asi que
+    // se manda como POST con _method=PUT (method spoofing) para que la foto llegue.
+    formData.set('_method', 'PUT');
+
+    if (payload.phone !== undefined) {
+      formData.set('phone', payload.phone);
+    }
+
+    if (payload.address !== undefined) {
+      formData.set('address', payload.address);
+    }
+
+    if (payload.active !== undefined) {
+      formData.set('active', payload.active ? '1' : '0');
+    }
+
+    if (payload.photo) {
+      formData.set('photo', payload.photo);
+    }
+
+    return this.checkmateApi.post<unknown>(`${this.adminBase()}/students/${studentId}`, formData).pipe(
+      map((response) => ({ success: true, message: null, student: this.toStudent(unwrapData(response), 0) })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null, student: null })),
+    );
+  }
+
+  addStudentTutor(
+    studentId: string,
+    payload: { firstName: string; firstSurname: string; secondSurname: string; phone: string; relationship: string; isPrimary: boolean },
+  ): Observable<ManagementStudentActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.', student: null });
+    }
+
+    return this.checkmateApi
+      .post<unknown>(`${this.adminBase()}/students/${studentId}/tutors`, {
+        first_name: payload.firstName,
+        first_surname: payload.firstSurname,
+        second_surname: payload.secondSurname,
+        phone: payload.phone,
+        relationship: payload.relationship,
+        is_primary: payload.isPrimary,
+      })
+      .pipe(
+        map((response) => ({ success: true, message: null, student: this.toStudent(unwrapData(response), 0) })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null, student: null })),
+      );
+  }
+
+  updateStudentTutor(
+    studentId: string,
+    tutorId: string,
+    payload: { phone?: string; relationship?: string; isPrimary?: boolean },
+  ): Observable<ManagementStudentActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.', student: null });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/students/${studentId}/tutors/${tutorId}`, {
+        ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+        ...(payload.relationship !== undefined ? { relationship: payload.relationship } : {}),
+        ...(payload.isPrimary !== undefined ? { is_primary: payload.isPrimary } : {}),
+      })
+      .pipe(
+        map((response) => ({ success: true, message: null, student: this.toStudent(unwrapData(response), 0) })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null, student: null })),
+      );
+  }
+
+  removeStudentTutor(studentId: string, tutorId: string): Observable<ManagementStudentActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.', student: null });
+    }
+
+    return this.checkmateApi.delete<unknown>(`${this.adminBase()}/students/${studentId}/tutors/${tutorId}`).pipe(
+      map((response) => ({ success: true, message: null, student: this.toStudent(unwrapData(response), 0) })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null, student: null })),
+    );
   }
 
   private scopeBase(): string {
@@ -361,6 +497,9 @@ export class ManagementDataService {
     const fallback = emptyStudent(index);
     const group = toRecord(record?.['group']);
     const career = toRecord(group?.['career']);
+    const tutors = Array.isArray(record?.['tutors'])
+      ? (record?.['tutors'] as unknown[]).map((item) => this.toTutor(item))
+      : fallback.tutors;
 
     return {
       ...fallback,
@@ -371,10 +510,26 @@ export class ManagementDataService {
       career: readString(career, 'name', fallback.career),
       email: readString(record, 'email', fallback.email),
       phone: readString(record, 'phone', fallback.phone),
+      address: readString(record, 'address', fallback.address),
+      avatarUrl: readString(record, 'photo_url', fallback.avatarUrl),
+      tutors,
+      tutorName: tutors.find((tutor) => tutor.isPrimary)?.fullName || tutors[0]?.fullName || fallback.tutorName,
       attendanceRate: readNumber(record, 'attendance_rate', fallback.attendanceRate),
       status: readBoolean(record, 'active', true)
         ? { label: 'Activo', tone: 'success' }
         : { label: 'Inactivo', tone: 'neutral' },
+    };
+  }
+
+  private toTutor(value: unknown): ManagementTutor {
+    const record = toRecord(value);
+
+    return {
+      id: readId(record, ''),
+      fullName: readString(record, 'full_name', ''),
+      phone: readString(record, 'phone', ''),
+      relationship: readString(record, 'relationship', ''),
+      isPrimary: readBoolean(record, 'is_primary', false),
     };
   }
 
@@ -479,6 +634,9 @@ export class ManagementDataService {
     const record = toRecord(value);
     const fallback = emptyIncident(index);
     const reporter = toRecord(record?.['reporter']);
+    const groups = Array.isArray(record?.['groups']) ? (record?.['groups'] as unknown[]) : [];
+    const students = Array.isArray(record?.['students']) ? (record?.['students'] as unknown[]) : [];
+    const history = Array.isArray(record?.['history']) ? (record?.['history'] as unknown[]) : [];
     const status = readString(record, 'status', fallback.status.label);
     const severity = readString(record, 'severity', fallback.severity.label);
 
@@ -487,13 +645,51 @@ export class ManagementDataService {
       id: readId(record, fallback.id),
       title: readString(record, 'title', fallback.title),
       type: readString(record, 'type', fallback.type),
-      location: readString(record, 'location', fallback.location),
+      groups: groups.map((item) => this.groupLabel(toRecord(item))),
       reportedBy: readString(reporter, 'full_name', fallback.reportedBy),
-      date: readString(record, 'created_at', fallback.date),
+      date: formatDateLabel(readString(record, 'created_at', fallback.date)),
       description: readString(record, 'description', fallback.description),
+      evidenceUrl: readString(record, 'evidence_url', fallback.evidenceUrl),
       status: statusFromLabel(status),
       severity: statusFromLabel(severity),
+      roster: students.length ? students.map((item) => this.toIncidentRosterItem(item)) : fallback.roster,
+      history: history.length ? history.map((item) => this.toIncidentHistoryItem(item)) : fallback.history,
     };
+  }
+
+  private toIncidentRosterItem(value: unknown): ManagementIncidentRosterItem {
+    const record = toRecord(value);
+    const rawStatus = readString(record, 'status', '');
+    const validStatuses: IncidentRosterStatus[] = ['DESCONOCIDO', 'PRESENTE', 'EXTRAVIADO', 'AUSENTE', 'SEGURO'];
+    const status = (validStatuses as string[]).includes(rawStatus)
+      ? (rawStatus as IncidentRosterStatus)
+      : 'DESCONOCIDO';
+
+    return {
+      studentId: readId(record, ''),
+      name: readString(record, 'full_name', ''),
+      controlNumber: readString(record, 'control_number', ''),
+      status,
+      notes: readString(record, 'notes', ''),
+    };
+  }
+
+  private toIncidentHistoryItem(value: unknown): ManagementIncidentHistoryItem {
+    const record = toRecord(value);
+    const performedBy = toRecord(record?.['performed_by']);
+
+    return {
+      id: readId(record, ''),
+      date: formatDateLabel(readString(record, 'created_at', '')),
+      description: readString(record, 'action', ''),
+      actor: readString(performedBy, 'full_name', ''),
+    };
+  }
+
+  private groupLabel(record: UnknownRecord | null): string {
+    const grade = readString(record, 'grade', '');
+    const section = readString(record, 'section', '');
+    return [grade, section].filter(Boolean).join('-');
   }
 
   private toClaim(value: unknown, index: number): ManagementClaim {
@@ -602,6 +798,20 @@ function readId(record: UnknownRecord | null | undefined, fallback: string): str
   return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
 }
 
+function formatDateLabel(value: string): string {
+  if (!value) {
+    return '';
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }).format(parsed);
+}
+
 function statusFromLabel(label: string) {
   const normalized = label.toLowerCase();
 
@@ -628,6 +838,7 @@ function statusFromLabel(label: string) {
     normalized.includes('acept') ||
     normalized.includes('aprob') ||
     normalized.includes('concl') ||
+    normalized.includes('resuelt') ||
     normalized.includes('online') ||
     normalized.includes('asist')
   ) {
@@ -662,7 +873,9 @@ function emptyStudent(index: number): ManagementStudent {
     career: '',
     email: '',
     phone: '',
+    address: '',
     tutorName: '',
+    tutors: [],
     status: neutralStatus(),
     attendanceRate: 0,
     level: '',
@@ -746,7 +959,7 @@ function emptyIncident(index: number): ManagementIncident {
     type: '',
     severity: neutralStatus(),
     status: neutralStatus(),
-    location: '',
+    groups: [],
     reportedBy: '',
     date: '',
     description: '',

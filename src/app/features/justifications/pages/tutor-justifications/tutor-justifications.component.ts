@@ -102,7 +102,7 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
             <button type="button" class="icon-button" disabled aria-label="Pagina anterior">
               <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
             </button>
-            <button type="button" class="icon-button" aria-label="Pagina siguiente">
+            <button type="button" class="icon-button" disabled aria-label="Pagina siguiente">
               <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
             </button>
           </div>

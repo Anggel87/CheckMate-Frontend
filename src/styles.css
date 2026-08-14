@@ -867,6 +867,32 @@ app-root {
   border-bottom: 1px solid rgba(210, 210, 215, 0.72);
 }
 
+.profile-menu__panel header {
+  position: relative;
+  justify-content: flex-start;
+  padding-right: 66px;
+}
+
+.profile-menu__panel header > div {
+  display: grid;
+  min-width: 0;
+}
+
+.profile-menu__panel header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu__role-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-height: auto;
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
 .profile-menu__panel a,
 .profile-menu__panel button,
 .dropdown-link {
@@ -887,6 +913,15 @@ app-root {
 .profile-menu__panel button:hover,
 .dropdown-link:hover {
   background: var(--checkmate-secondary);
+}
+
+.profile-menu__logout {
+  color: var(--checkmate-danger);
+}
+
+.profile-menu__logout:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .notification-menu__badge {
@@ -2053,22 +2088,28 @@ app-root {
 
 .profile-menu__button {
   display: grid;
-  width: 48px;
-  height: 48px;
-  min-height: 48px;
+  width: 52px;
+  height: 52px;
+  min-height: 52px;
   padding: 0;
   place-items: center;
   background: transparent;
-  border: 1px solid rgba(210, 210, 215, 0.92);
+  border: 0;
   border-radius: 999px;
   box-shadow: none;
+  outline: none;
+}
+
+.profile-menu__button:focus,
+.profile-menu__button:focus-visible {
+  outline: none;
 }
 
 .profile-menu__avatar,
 .profile-menu__avatar img {
   display: block;
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
 }
 
@@ -2582,15 +2623,15 @@ app-root {
   }
 
   .profile-menu__button {
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 
   .profile-menu__avatar,
   .profile-menu__avatar img {
-    width: 34px;
-    height: 34px;
+    width: 38px;
+    height: 38px;
   }
 
   .dashboard-page {
@@ -2851,12 +2892,17 @@ app-root {
     gap: 8px;
   }
 
-  .checkmate-topbar .icon-button,
-  .profile-menu__button {
+  .checkmate-topbar .icon-button {
     width: 36px;
     height: 36px;
     min-height: 36px;
     font-size: 16px;
+  }
+
+  .profile-menu__button {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
   }
 
   .notification-menu__panel {
@@ -3264,27 +3310,6 @@ app-root {
   font-size: 14px;
 }
 
-.student-floating-action {
-  position: fixed;
-  right: min(42px, 5vw);
-  bottom: 36px;
-  z-index: 20;
-  display: grid;
-  width: 58px;
-  height: 58px;
-  place-items: center;
-  background: var(--checkmate-info);
-  border-radius: 18px;
-  box-shadow: 0 12px 24px rgba(0, 122, 255, 0.22);
-}
-
-.student-floating-action img {
-  width: 46px;
-  height: 46px;
-  border-radius: 999px;
-  object-fit: cover;
-}
-
 .student-profile-grid {
   grid-template-columns: minmax(0, 2fr) minmax(280px, 0.95fr);
 }
@@ -3418,6 +3443,15 @@ app-root {
 
 .student-contact-grid__wide {
   grid-column: 1 / -1;
+}
+
+.student-help-note {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 28px 24px;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
 }
 
 .student-profile-shortcuts {
@@ -4337,10 +4371,6 @@ app-root {
   .student-calendar-day {
     min-height: 62px;
   }
-
-  .student-floating-action {
-    display: none;
-  }
 }
 
 /* Teacher role screens */
@@ -4373,8 +4403,7 @@ app-root {
 .teacher-attendance-header,
 .teacher-detail-actions,
 .teacher-table-card__header,
-.teacher-student-summary-strip,
-.teacher-incident-list-card__toolbar {
+.teacher-student-summary-strip {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -4454,9 +4483,7 @@ app-root {
 }
 
 .teacher-page__split--summary,
-.teacher-incidents-layout,
 .teacher-incident-detail-layout,
-.teacher-form-layout,
 .teacher-emergency-layout,
 .teacher-profile-layout {
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -4551,9 +4578,7 @@ app-root {
 }
 
 .teacher-day-summary h2,
-.teacher-week-summary h2,
-.teacher-comment-card h2,
-.teacher-emergency-protocol-box h2 {
+.teacher-comment-card h2 {
   font-size: 18px;
 }
 
@@ -4728,11 +4753,15 @@ app-root {
 }
 
 .teacher-history-table .teacher-table__row {
-  grid-template-columns: 1.2fr 1.4fr 0.8fr 1fr 80px;
+  grid-template-columns: 1.2fr 1.4fr 0.8fr 1fr;
 }
 
 .teacher-justifications-table .teacher-table__row {
   grid-template-columns: 1fr 1.1fr 1.6fr 0.8fr 80px;
+}
+
+.teacher-incidents-table .teacher-table__row {
+  grid-template-columns: 0.9fr 1fr 1.6fr 0.9fr 0.9fr 80px;
 }
 
 .teacher-person-cell {
@@ -4941,58 +4970,12 @@ app-root {
   opacity: 0.35;
 }
 
-.teacher-incidents-layout,
 .teacher-incident-detail-layout,
-.teacher-form-layout,
 .teacher-emergency-layout,
 .teacher-profile-layout {
   display: grid;
 }
 
-.teacher-incident-list-card {
-  display: grid;
-  gap: 28px;
-  min-height: 720px;
-}
-
-.teacher-incident-list-card__toolbar {
-  align-items: center;
-}
-
-.teacher-sort-label {
-  color: #4a4a4a;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.teacher-sort-label b {
-  color: #c70d2c;
-  font-size: 18px;
-}
-
-.teacher-incident-list {
-  display: grid;
-  gap: 10px;
-}
-
-.teacher-incident-row {
-  display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 180px 52px;
-  gap: 18px;
-  align-items: center;
-  min-height: 92px;
-  padding: 18px 20px;
-  background: #fffafa;
-  border-left: 4px solid #cf1f28;
-  border-radius: 10px;
-}
-
-.teacher-incident-row.tone-neutral {
-  background: #ffffff;
-  border-left-color: var(--checkmate-text-secondary);
-}
-
-.teacher-incident-row__icon,
 .teacher-report-icon {
   display: inline-grid;
   width: 54px;
@@ -5003,38 +4986,9 @@ app-root {
   border-radius: 10px;
 }
 
-.teacher-incident-row h2 {
-  font-size: 20px;
-}
-
-.teacher-incident-row h2 small {
-  display: inline-flex;
-  margin-left: 8px;
-  padding: 4px 8px;
-  color: #ffffff;
-  font-size: 11px;
-  text-transform: uppercase;
-  background: #cf1f28;
-  border-radius: 5px;
-}
-
-.teacher-incident-row p,
-.teacher-incident-row__reporter span {
-  margin-top: 4px;
-  color: var(--checkmate-text-secondary);
-}
-
-.teacher-incident-row__reporter {
-  display: grid;
-  gap: 2px;
-  text-align: right;
-}
-
-.teacher-incident-row__reporter span,
 .teacher-kicker,
 .teacher-report-grid span,
 .teacher-report-section h2,
-.teacher-location-card h2,
 .teacher-attendance-status-card h2,
 .teacher-timeline-card h2 {
   font-size: 12px;
@@ -5043,7 +4997,6 @@ app-root {
   text-transform: uppercase;
 }
 
-.teacher-new-incident-button,
 .teacher-jump-button {
   justify-self: center;
   display: inline-flex;
@@ -5059,142 +5012,6 @@ app-root {
   border: 0;
   border-radius: 14px;
   box-shadow: 0 14px 28px rgba(255, 75, 36, 0.24);
-}
-
-.teacher-map-card {
-  display: grid;
-  gap: 12px;
-}
-
-.teacher-campus-map,
-.teacher-location-map {
-  position: relative;
-  min-height: 190px;
-  overflow: hidden;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.7) 1px, transparent 1px),
-    linear-gradient(rgba(255, 255, 255, 0.7) 1px, transparent 1px),
-    linear-gradient(135deg, #dce5ec, #f4f7fa);
-  background-size:
-    44px 44px,
-    44px 44px,
-    auto;
-  border-radius: 8px;
-}
-
-.teacher-campus-map::before,
-.teacher-location-map::before {
-  position: absolute;
-  inset: 24px;
-  content: '';
-  background:
-    linear-gradient(90deg, #8e9aa8 18%, transparent 18% 28%, #6f7b88 28% 45%, transparent 45%),
-    linear-gradient(#a9b2bd 0 0) 52% 32% / 68px 44px no-repeat,
-    linear-gradient(#7b8794 0 0) 70% 56% / 96px 34px no-repeat,
-    linear-gradient(#8e9aa8 0 0) 28% 66% / 86px 38px no-repeat;
-  opacity: 0.8;
-}
-
-.teacher-campus-map__pin {
-  position: absolute;
-  top: 42%;
-  left: 42%;
-  z-index: 1;
-  width: 46px;
-  height: 46px;
-  background: rgba(207, 31, 40, 0.9);
-  border: 8px solid rgba(255, 255, 255, 0.8);
-  border-radius: 999px;
-  box-shadow: 0 0 0 18px rgba(207, 31, 40, 0.22);
-}
-
-.teacher-live-badge {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 14px;
-  color: #000000;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 999px;
-}
-
-.teacher-live-badge i {
-  color: #cf1f28;
-  font-size: 8px;
-}
-
-.teacher-map-card > span {
-  color: var(--checkmate-text-secondary);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.teacher-map-card > strong {
-  font-size: 18px;
-}
-
-.teacher-week-summary {
-  display: grid;
-  gap: 20px;
-}
-
-.teacher-week-summary__row {
-  display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-}
-
-.teacher-week-summary__row > span {
-  width: 8px;
-  height: 42px;
-  border-radius: 999px;
-  background: #cf1f28;
-}
-
-.teacher-week-summary__row > span.is-active {
-  background: #ec3854;
-}
-
-.teacher-week-summary__row > span.is-muted {
-  background: #8e8e93;
-}
-
-.teacher-week-summary__row small {
-  display: block;
-  color: var(--checkmate-text-secondary);
-}
-
-.teacher-week-summary__row b {
-  font-size: 34px;
-}
-
-.teacher-protocol-card {
-  display: grid;
-  gap: 14px;
-  padding: 28px;
-  color: #ffffff;
-  background: linear-gradient(135deg, #1d1d1f, #241719);
-  border-radius: 12px;
-}
-
-.teacher-protocol-card p {
-  color: rgba(255, 255, 255, 0.52);
-  line-height: 1.5;
-}
-
-.teacher-protocol-card a,
-.teacher-protocol-card i {
-  color: #d01f2a;
-  font-weight: 800;
-  text-transform: uppercase;
 }
 
 .teacher-detail-actions {
@@ -5243,7 +5060,6 @@ app-root {
 .teacher-kicker,
 .teacher-report-grid span,
 .teacher-report-section h2,
-.teacher-location-card h2,
 .teacher-attendance-status-card h2,
 .teacher-timeline-card h2 {
   color: var(--checkmate-text-secondary);
@@ -5326,27 +5142,10 @@ app-root {
   border-radius: 6px;
 }
 
-.teacher-location-card,
 .teacher-attendance-status-card,
 .teacher-timeline-card {
   display: grid;
   gap: 16px;
-}
-
-.teacher-location-map {
-  min-height: 160px;
-}
-
-.teacher-location-card strong {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 18px;
-}
-
-.teacher-location-card p {
-  color: var(--checkmate-text-secondary);
-  line-height: 1.45;
 }
 
 .teacher-attendance-status-card header {
@@ -5417,15 +5216,18 @@ app-root {
 }
 
 .teacher-emergency-type-card {
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 14px;
   min-height: 220px;
   padding: 34px 24px;
+  cursor: pointer;
   background: #ffffff;
   border: 1px solid rgba(210, 210, 215, 0.9);
   border-top: 4px solid #000000;
   border-radius: 12px;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .teacher-emergency-type-card.tone-danger {
@@ -5437,11 +5239,44 @@ app-root {
 }
 
 .teacher-emergency-type-card.is-selected {
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.12);
+  background: #f4f4f5;
+  box-shadow: 0 0 0 3px #000000;
 }
 
-.teacher-emergency-type-card span,
-.teacher-emergency-protocol-box > span {
+.teacher-emergency-type-card.tone-danger.is-selected {
+  background: #fff1f1;
+  box-shadow: 0 0 0 3px #c70d2c;
+}
+
+.teacher-emergency-type-card.tone-warning.is-selected {
+  background: #fff8ec;
+  box-shadow: 0 0 0 3px #b06b00;
+}
+
+.teacher-emergency-type-card__check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 13px;
+  background: #000000;
+  border-radius: 999px;
+}
+
+.teacher-emergency-type-card.tone-danger .teacher-emergency-type-card__check {
+  background: #c70d2c;
+}
+
+.teacher-emergency-type-card.tone-warning .teacher-emergency-type-card__check {
+  background: #b06b00;
+}
+
+.teacher-emergency-type-card span {
   display: inline-grid;
   width: 86px;
   height: 86px;
@@ -5474,10 +5309,6 @@ app-root {
   text-transform: uppercase;
 }
 
-.teacher-form-layout {
-  margin-top: 28px;
-}
-
 .teacher-incident-form-card {
   display: grid;
   gap: 24px;
@@ -5501,6 +5332,32 @@ app-root {
   gap: 24px;
 }
 
+.teacher-help-note {
+  margin: 0;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+}
+
+.teacher-checkbox-list {
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  padding: 12px;
+  overflow-y: auto;
+  background: var(--checkmate-background);
+  border: 1px solid rgba(210, 210, 215, 0.9);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.teacher-checkbox-list .checkmate-checkbox {
+  padding: 8px;
+  border-radius: var(--checkmate-radius-sm);
+}
+
+.teacher-checkbox-list .checkmate-checkbox:hover {
+  background: var(--checkmate-hover);
+}
+
 .teacher-jump-button {
   justify-self: start;
   min-width: 220px;
@@ -5515,40 +5372,6 @@ app-root {
 
 .teacher-jump-button:disabled {
   opacity: 0.55;
-}
-
-.teacher-emergency-protocol-box {
-  display: grid;
-  gap: 16px;
-  background: #ebe6e6;
-}
-
-.teacher-emergency-protocol-box > span {
-  width: 56px;
-  height: 56px;
-  color: #c70d2c;
-  font-size: 18px;
-  background: #ffffff;
-}
-
-.teacher-emergency-protocol-box p,
-.teacher-emergency-protocol-box li {
-  color: #4a4a4a;
-  line-height: 1.5;
-}
-
-.teacher-emergency-protocol-box ul {
-  display: grid;
-  gap: 12px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.teacher-emergency-protocol-box li::before {
-  margin-right: 8px;
-  color: #c70d2c;
-  content: '\2713';
 }
 
 .teacher-monitor-card {
@@ -5673,6 +5496,10 @@ app-root {
   font-size: 12px;
   background: #0b6b23;
   border-radius: 999px;
+}
+
+.teacher-emergency-student b.is-absent {
+  background: #c70d2c;
 }
 
 .teacher-emergency-mark {
@@ -5864,6 +5691,15 @@ app-root {
   background: #ffd7d2;
 }
 
+.teacher-mini-calendar span.is-muted {
+  color: var(--checkmate-text-secondary);
+  background: var(--checkmate-secondary);
+}
+
+.teacher-mini-calendar span.is-empty {
+  visibility: hidden;
+}
+
 .teacher-attendance-calendar-small footer {
   display: flex;
   flex-wrap: wrap;
@@ -5935,7 +5771,8 @@ app-root {
   display: grid;
 }
 
-.teacher-student-details-card h2 {
+.teacher-student-details-card h2,
+.teacher-student-tutors-card h2 {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -6090,10 +5927,15 @@ app-root {
 
 .teacher-stat-card > i {
   position: absolute;
-  top: 22px;
-  right: 22px;
-  padding: 8px;
-  font-size: 18px;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  line-height: 1;
   border-radius: 8px;
 }
 
@@ -6140,9 +5982,7 @@ app-root {
   }
 
   .teacher-page__split--summary,
-  .teacher-incidents-layout,
   .teacher-incident-detail-layout,
-  .teacher-form-layout,
   .teacher-emergency-layout,
   .teacher-profile-layout {
     grid-template-columns: 1fr;
@@ -6155,7 +5995,6 @@ app-root {
   .teacher-detail-actions,
   .teacher-table-card__header,
   .teacher-student-summary-strip,
-  .teacher-incident-list-card__toolbar,
   .teacher-attendance-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -6184,15 +6023,6 @@ app-root {
   .teacher-schedule-row__time {
     padding-right: 0;
     border-right: 0;
-  }
-
-  .teacher-incident-row {
-    grid-template-columns: 54px minmax(0, 1fr) 52px;
-  }
-
-  .teacher-incident-row__reporter {
-    grid-column: 2 / -1;
-    text-align: left;
   }
 
   .teacher-student-hero {
@@ -6232,13 +6062,8 @@ app-root {
   .teacher-filter-actions .btn-checkmate,
   .teacher-attendance-toolbar .btn-checkmate,
   .teacher-detail-actions .btn-checkmate,
-  .teacher-new-incident-button,
   .teacher-jump-button {
     width: 100%;
-  }
-
-  .teacher-new-incident-button {
-    min-width: 0;
   }
 
   .teacher-emergency-student {
@@ -6979,6 +6804,34 @@ body {
   grid-column: 1 / -1;
 }
 
+.management-tutors-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.management-tutor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(210, 210, 215, 0.6);
+}
+
+.management-tutor-row small {
+  display: block;
+  color: var(--checkmate-text-secondary);
+  margin-top: 4px;
+}
+
+.management-tutor-row__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .management-profile-card {
   justify-items: center;
   text-align: center;
@@ -7342,17 +7195,22 @@ body {
     gap: 6px;
   }
 
-  .checkmate-topbar .icon-button,
-  .profile-menu__button {
+  .checkmate-topbar .icon-button {
     width: 34px;
     height: 34px;
     min-height: 34px;
   }
 
+  .profile-menu__button {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
   .profile-menu__avatar,
   .profile-menu__avatar img {
-    width: 30px;
-    height: 30px;
+    width: 34px;
+    height: 34px;
   }
 
   .checkmate-topbar__left strong {

@@ -1,9 +1,9 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
-import { combineLatest, finalize } from 'rxjs';
+import { combineLatest, finalize, forkJoin } from 'rxjs';
 import { AuthService } from '../../../../core/authentication/auth.service';
 import { ROUTE_PATHS } from '../../../../core/constants/route-paths.constants';
 import { UserRole } from '../../../../core/enums/user-role.enum';
@@ -16,25 +16,27 @@ import { ManagementDataService } from '../../data-access/management-data.service
 import {
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
+  IncidentRosterStatus,
   ManagementAuditLog,
   ManagementClaim,
   ManagementClassroom,
   ManagementDevice,
   ManagementGroup,
   ManagementIncident,
-  ManagementIncidentRosterItem,
   ManagementJustification,
+  ManagementSchedule,
   ManagementSnapshot,
   ManagementStatus,
   ManagementStudent,
   ManagementTeacher,
+  ManagementTutor,
   ManagementView,
 } from '../../models/management.model';
 
 @Component({
   selector: 'app-management-workspace',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, ReactiveFormsModule, BreadcrumbsComponent, FileUploadComponent],
+  imports: [NgTemplateOutlet, RouterLink, ReactiveFormsModule, FormsModule, BreadcrumbsComponent, FileUploadComponent],
   template: `
     <section class="management-page">
       <app-breadcrumbs [items]="breadcrumbs()" />
@@ -219,6 +221,12 @@ import {
                     <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
                     Ver justificantes
                   </a>
+                  @if (canEditStudents() && !editingStudent()) {
+                    <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="startEditingStudent(student)">
+                      <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                      Editar datos
+                    </button>
+                  }
                 </article>
 
                 <article class="checkmate-card management-info-panel">
@@ -231,13 +239,157 @@ import {
                   </dl>
                 </article>
 
+                @if (editingStudent()) {
+                  <form class="checkmate-card management-form" [formGroup]="studentForm" (ngSubmit)="saveStudent(student)">
+                    <h2>Editar datos del alumno</h2>
+                    <div class="management-form__grid">
+                      <label class="checkmate-form-field">
+                        <span class="checkmate-label">Telefono</span>
+                        <input class="checkmate-input" type="tel" formControlName="phone" />
+                      </label>
+                      <label class="checkmate-form-field">
+                        <span class="checkmate-label">Direccion</span>
+                        <input class="checkmate-input" type="text" formControlName="address" />
+                      </label>
+                      <label class="checkmate-form-field">
+                        <span class="checkmate-label">Estado</span>
+                        <select class="checkmate-select" formControlName="active">
+                          <option [ngValue]="true">Activo</option>
+                          <option [ngValue]="false">Inactivo</option>
+                        </select>
+                      </label>
+                      <label class="checkmate-form-field management-form__full">
+                        <span class="checkmate-label">Foto de perfil</span>
+                        <app-file-upload
+                          title="Haz clic para subir una foto"
+                          description="JPG o PNG, maximo 3MB."
+                          accept="image/png,image/jpeg"
+                          [maxSizeMb]="3"
+                          (filesSelected)="selectStudentPhoto($event)"
+                          (fileRemoved)="clearStudentPhoto()"
+                        />
+                      </label>
+                    </div>
+                    <footer class="management-form__footer">
+                      <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="cancelEditingStudent()">
+                        Cancelar
+                      </button>
+                      <button type="submit" class="btn-checkmate btn-checkmate-primary" [disabled]="submitting()">
+                        Guardar
+                      </button>
+                    </footer>
+                  </form>
+                }
+
                 <article class="checkmate-card management-info-panel">
                   <h2>Datos de contacto</h2>
                   <dl class="management-data-grid">
                     <div><dt>Correo institucional</dt><dd>{{ student.email }}</dd></div>
                     <div><dt>Telefono movil</dt><dd>{{ student.phone }}</dd></div>
-                    <div><dt>Tutor familiar</dt><dd>{{ student.tutorName }}</dd></div>
+                    <div><dt>Direccion</dt><dd>{{ student.address || 'Sin direccion registrada' }}</dd></div>
                   </dl>
+                </article>
+
+                <article class="checkmate-card management-info-panel management-tutors-panel">
+                  <header class="management-tutors-panel__header">
+                    <h2>Tutores legales</h2>
+                    @if (canEditStudents() && !addingTutor()) {
+                      <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="startAddingTutor()">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        Agregar tutor
+                      </button>
+                    }
+                  </header>
+
+                  @for (tutor of student.tutors; track tutor.id) {
+                    @if (editingTutorId() === tutor.id) {
+                      <form class="management-form" [formGroup]="tutorEditForm" (ngSubmit)="saveTutorEdit(student, tutor)">
+                        <div class="management-form__grid">
+                          <label class="checkmate-form-field">
+                            <span class="checkmate-label">Telefono</span>
+                            <input class="checkmate-input" type="tel" formControlName="phone" />
+                          </label>
+                          <label class="checkmate-form-field">
+                            <span class="checkmate-label">Relacion con el alumno</span>
+                            <input class="checkmate-input" type="text" formControlName="relationship" />
+                          </label>
+                          <label class="checkmate-form-field management-form__full">
+                            <input type="checkbox" formControlName="isPrimary" />
+                            <span class="checkmate-label">Tutor principal</span>
+                          </label>
+                        </div>
+                        <footer class="management-form__footer">
+                          <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="cancelEditingTutor()">
+                            Cancelar
+                          </button>
+                          <button type="submit" class="btn-checkmate btn-checkmate-primary" [disabled]="submitting()">
+                            Guardar
+                          </button>
+                        </footer>
+                      </form>
+                    } @else {
+                      <div class="management-tutor-row">
+                        <div>
+                          <strong>{{ tutor.fullName }}</strong>
+                          @if (tutor.isPrimary) {
+                            <span class="status-badge status-badge--info">Principal</span>
+                          }
+                          <small>{{ tutor.relationship }} - {{ tutor.phone }}</small>
+                        </div>
+                        @if (canEditStudents()) {
+                          <div class="management-tutor-row__actions">
+                            <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="startEditingTutor(tutor)">
+                              Editar
+                            </button>
+                            <button type="button" class="btn-checkmate btn-checkmate-danger" (click)="removeTutor(student, tutor)">
+                              Quitar
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    }
+                  } @empty {
+                    <p class="dropdown-empty">Sin tutores registrados.</p>
+                  }
+
+                  @if (addingTutor()) {
+                    <form class="management-form" [formGroup]="tutorForm" (ngSubmit)="saveNewTutor(student)">
+                      <div class="management-form__grid">
+                        <label class="checkmate-form-field">
+                          <span class="checkmate-label">Nombre(s)</span>
+                          <input class="checkmate-input" type="text" formControlName="firstName" />
+                        </label>
+                        <label class="checkmate-form-field">
+                          <span class="checkmate-label">Apellido paterno</span>
+                          <input class="checkmate-input" type="text" formControlName="firstSurname" />
+                        </label>
+                        <label class="checkmate-form-field">
+                          <span class="checkmate-label">Apellido materno</span>
+                          <input class="checkmate-input" type="text" formControlName="secondSurname" />
+                        </label>
+                        <label class="checkmate-form-field">
+                          <span class="checkmate-label">Telefono</span>
+                          <input class="checkmate-input" type="tel" formControlName="phone" />
+                        </label>
+                        <label class="checkmate-form-field">
+                          <span class="checkmate-label">Relacion con el alumno</span>
+                          <input class="checkmate-input" type="text" formControlName="relationship" placeholder="Madre, Padre, Tutor..." />
+                        </label>
+                        <label class="checkmate-form-field management-form__full">
+                          <input type="checkbox" formControlName="isPrimary" />
+                          <span class="checkmate-label">Tutor principal</span>
+                        </label>
+                      </div>
+                      <footer class="management-form__footer">
+                        <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="cancelAddingTutor()">
+                          Cancelar
+                        </button>
+                        <button type="submit" class="btn-checkmate btn-checkmate-primary" [disabled]="submitting()">
+                          Agregar
+                        </button>
+                      </footer>
+                    </form>
+                  }
                 </article>
               </div>
             }
@@ -541,39 +693,41 @@ import {
             <div class="management-split">
               <div class="checkmate-card management-table-card">
                 <div class="management-toolbar">
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Estado</span>
-                    <select class="checkmate-select"><option>Todos</option><option>Activo</option><option>Concluido</option></select>
-                  </label>
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Severidad</span>
-                    <select class="checkmate-select"><option>Todas</option><option>Critico</option><option>Urgente</option></select>
-                  </label>
+                  <div class="teacher-tabs">
+                    @for (tab of incidentTabs; track tab.key) {
+                      <button type="button" [class.is-active]="incidentTab() === tab.key" (click)="incidentTab.set(tab.key)">
+                        {{ tab.label }}
+                      </button>
+                    }
+                  </div>
                 </div>
                 <div class="management-list">
-                  @for (incident of snapshot().incidents; track incident.id) {
+                  @for (incident of filteredIncidents(); track incident.id) {
                     <article class="management-record">
                       <span class="management-icon management-icon--danger">
                         <i class="fa-solid fa-fire" aria-hidden="true"></i>
                       </span>
                       <div>
                         <h2>{{ incident.title }}</h2>
-                        <p>{{ incident.date }} · {{ incident.location }}</p>
+                        <p>{{ incident.date }} · {{ incident.groups.join(', ') || 'Sin grupos' }}</p>
                       </div>
                       <span [class]="statusClass(incident.severity)">{{ incident.severity.label }}</span>
+                      <span [class]="statusClass(incident.status)">{{ incident.status.label }}</span>
                       <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/incidents/' + incident.id">
                         Detalles
                       </a>
                     </article>
+                  } @empty {
+                    <p class="dropdown-empty">No hay incidentes en esta categoria.</p>
                   }
                 </div>
               </div>
               <aside class="checkmate-card management-summary">
-                <h2>Resumen semanal</h2>
+                <h2>Resumen</h2>
                 <dl class="management-metrics">
-                  <div><dt>Criticos</dt><dd>04</dd></div>
-                  <div><dt>En curso</dt><dd>12</dd></div>
-                  <div><dt>Resueltos</dt><dd>28</dd></div>
+                  <div><dt>Activos</dt><dd>{{ incidentCountByStatus('ACTIVO') }}</dd></div>
+                  <div><dt>Resueltos</dt><dd>{{ incidentCountByStatus('RESUELTO') }}</dd></div>
+                  <div><dt>Cancelados</dt><dd>{{ incidentCountByStatus('CANCELADO') }}</dd></div>
                 </dl>
               </aside>
             </div>
@@ -613,10 +767,62 @@ import {
                   <span class="checkmate-label">Descripcion</span>
                   <textarea class="checkmate-textarea" formControlName="description" placeholder="Describe la situacion con detalle"></textarea>
                 </label>
+              </div>
+
+              <div class="management-form__grid">
                 <label class="checkmate-form-field">
-                  <span class="checkmate-label">Ubicacion especifica</span>
-                  <input class="checkmate-input" type="text" formControlName="location" placeholder="Ej. Laboratorio 4" />
+                  <span class="checkmate-label">Grupo afectado</span>
+                  <select
+                    class="checkmate-select"
+                    [ngModel]="selectedIncidentGroupId()"
+                    [ngModelOptions]="{ standalone: true }"
+                    (ngModelChange)="onIncidentGroupChange($event)"
+                  >
+                    <option value="">Selecciona un grupo</option>
+                    @for (group of snapshot().groups; track group.id) {
+                      <option [value]="group.id">{{ group.label }} - {{ group.career }}</option>
+                    }
+                  </select>
                 </label>
+
+                <label class="checkmate-form-field">
+                  <span class="checkmate-label">Horario (ancla del incidente)</span>
+                  <select
+                    class="checkmate-select"
+                    [ngModel]="selectedIncidentScheduleId()"
+                    [ngModelOptions]="{ standalone: true }"
+                    (ngModelChange)="selectedIncidentScheduleId.set($event)"
+                    [disabled]="!selectedIncidentGroupId() || loadingIncidentGroupData()"
+                  >
+                    <option value="">Selecciona un horario</option>
+                    @for (schedule of incidentGroupSchedules(); track schedule.id) {
+                      <option [value]="schedule.id">{{ schedule.day }} {{ schedule.time }} - {{ schedule.subject }}</option>
+                    }
+                  </select>
+                </label>
+              </div>
+
+              @if (selectedIncidentGroupId()) {
+                <div class="checkmate-form-field">
+                  <span class="checkmate-label">Alumnos afectados</span>
+                  <div class="teacher-checkbox-list">
+                    @for (student of incidentGroupStudents(); track student.id) {
+                      <label class="checkmate-checkbox">
+                        <input
+                          type="checkbox"
+                          [checked]="isIncidentStudentSelected(student.id)"
+                          (change)="toggleIncidentStudent(student.id)"
+                        />
+                        <span>{{ student.name }} - {{ student.controlNumber }}</span>
+                      </label>
+                    } @empty {
+                      <p class="dropdown-empty">Este grupo no tiene alumnos activos.</p>
+                    }
+                  </div>
+                </div>
+              }
+
+              <div class="management-form__grid">
                 <app-file-upload
                   class="management-form__full"
                   title="Evidencia"
@@ -627,9 +833,14 @@ import {
                   (fileRemoved)="clearIncidentEvidence()"
                 />
               </div>
+
               <footer class="management-form__footer">
                 <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/incidents'">Cancelar</a>
-                <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="incidentForm.invalid || submitting()">
+                <button
+                  class="btn-checkmate btn-checkmate-primary"
+                  type="submit"
+                  [disabled]="incidentForm.invalid || submitting() || !selectedIncidentScheduleId() || !selectedIncidentStudentIds().length"
+                >
                   <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
                   Guardar incidente
                 </button>
@@ -638,7 +849,12 @@ import {
           }
 
           @case ('incident-detail') {
-            @if (selectedIncident(); as incident) {
+            @if (incidentDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando incidente...
+              </div>
+            } @else if (incidentDetail(); as incident) {
               <div class="management-detail-grid">
                 <article class="checkmate-card management-info-panel management-info-panel--wide">
                   <div class="management-card__header">
@@ -650,13 +866,18 @@ import {
                     <div><dt>Tipo</dt><dd>{{ incident.type }}</dd></div>
                     <div><dt>Reportado por</dt><dd>{{ incident.reportedBy }}</dd></div>
                     <div><dt>Fecha</dt><dd>{{ incident.date }}</dd></div>
-                    <div><dt>Ubicacion</dt><dd>{{ incident.location }}</dd></div>
+                    <div><dt>Grupos afectados</dt><dd>{{ incident.groups.join(', ') || 'Sin grupos' }}</dd></div>
                   </dl>
                   <h3>Descripcion</h3>
-                  <p>{{ incident.description }}</p>
+                  <p>{{ incident.description || 'Sin descripcion registrada.' }}</p>
+                  @if (incident.evidenceUrl) {
+                    <a class="btn-checkmate btn-checkmate-secondary" [href]="incident.evidenceUrl" target="_blank" rel="noreferrer">
+                      Abrir evidencia
+                    </a>
+                  }
                   <div class="management-actions">
                     <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/incidents/' + incident.id + '/attendance'">
-                      Pase de lista
+                      Pase de lista ({{ presentCount(incident) }}/{{ incident.roster.length }})
                     </a>
                     @if (canCloseIncident(incident)) {
                       <button type="button" class="btn-checkmate btn-checkmate-danger" (click)="closeIncident(incident)">
@@ -674,6 +895,8 @@ import {
                         <strong>{{ item.date }} - {{ item.description }}</strong>
                         <small>{{ item.actor }}</small>
                       </article>
+                    } @empty {
+                      <p class="dropdown-empty">Sin historial disponible.</p>
                     }
                   </div>
                 </aside>
@@ -682,26 +905,17 @@ import {
           }
 
           @case ('incident-attendance') {
-            @if (selectedIncident(); as incident) {
+            @if (incidentDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando incidente...
+              </div>
+            } @else if (incidentDetail(); as incident) {
               <form class="checkmate-card management-form" (ngSubmit)="submitEmergencyList(incident)">
-                <div class="management-toolbar">
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Carrera</span>
-                    <select class="checkmate-select"><option>Ingenieria en Sistemas</option></select>
-                  </label>
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Turno</span>
-                    <select class="checkmate-select"><option>Matutino</option></select>
-                  </label>
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Grupo</span>
-                    <select class="checkmate-select"><option>10B</option></select>
-                  </label>
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Tipo</span>
-                    <input class="checkmate-input" [value]="incident.title" readonly />
-                  </label>
-                </div>
+                <header class="management-card__header">
+                  <h2>{{ incident.title }}</h2>
+                  <span [class]="statusClass(incident.status)">{{ incident.status.label }}</span>
+                </header>
                 <div class="management-table-wrap">
                   <table class="management-table">
                     <thead>
@@ -709,7 +923,7 @@ import {
                         <th>No. de control</th>
                         <th>Alumno</th>
                         <th>Estado</th>
-                        <th>Accion</th>
+                        <th>Notas</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -717,37 +931,40 @@ import {
                         <tr [class.is-present]="item.status === 'PRESENTE'" [class.is-absent]="item.status === 'AUSENTE'">
                           <td>{{ item.controlNumber }}</td>
                           <td><strong>{{ item.name }}</strong></td>
-                          <td>{{ rosterStatusLabel(item) }}</td>
                           <td>
-                            <div class="management-actions">
-                              <button type="button" class="btn-checkmate btn-checkmate-success" (click)="markRoster(incident.id, item.studentId, 'PRESENTE')">
-                                Presente
-                              </button>
-                              <button type="button" class="btn-checkmate btn-checkmate-danger" (click)="markRoster(incident.id, item.studentId, 'AUSENTE')">
-                                Faltante
-                              </button>
-                            </div>
+                            <select
+                              class="checkmate-select"
+                              [ngModel]="item.status"
+                              [ngModelOptions]="{ standalone: true }"
+                              (ngModelChange)="updateRosterStatus(item.studentId, $event)"
+                            >
+                              <option value="DESCONOCIDO">Sin confirmar</option>
+                              <option value="PRESENTE">Presente</option>
+                              <option value="AUSENTE">Faltante</option>
+                              <option value="EXTRAVIADO">Extraviado</option>
+                              <option value="SEGURO">A salvo (fuera del plantel)</option>
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              class="checkmate-input"
+                              type="text"
+                              placeholder="Nota opcional"
+                              [ngModel]="item.notes"
+                              [ngModelOptions]="{ standalone: true }"
+                              (ngModelChange)="updateRosterNotes(item.studentId, $event)"
+                            />
                           </td>
                         </tr>
+                      } @empty {
+                        <tr><td colspan="4">Sin alumnos asociados a este incidente.</td></tr>
                       }
                     </tbody>
                   </table>
                 </div>
-                <div class="management-form__grid">
-                  <label class="checkmate-form-field">
-                    <span class="checkmate-label">Comentario</span>
-                    <textarea class="checkmate-textarea" [formControl]="attendanceComment" placeholder="Notas generales del conteo"></textarea>
-                  </label>
-                  <app-file-upload
-                    title="Evidencia"
-                    description="Arrastra archivos aqui o haz clic para subir."
-                    accept="image/png,image/jpeg,application/pdf"
-                    [maxSizeMb]="10"
-                  />
-                </div>
                 <footer class="management-form__footer">
                   <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/incidents/' + incident.id">Cancelar</a>
-                  <button class="btn-checkmate btn-checkmate-primary" type="submit">Guardar registro</button>
+                  <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">Guardar registro</button>
                 </footer>
               </form>
             }
@@ -987,9 +1204,24 @@ export class ManagementWorkspaceComponent implements OnInit {
     description: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(500)] }),
     type: new FormControl('FIRE', { nonNullable: true, validators: [Validators.required] }),
     severity: new FormControl('CRITICA', { nonNullable: true, validators: [Validators.required] }),
-    location: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(160)] }),
     evidence: new FormControl<File | null>(null),
   });
+
+  protected readonly selectedIncidentGroupId = signal('');
+  protected readonly selectedIncidentScheduleId = signal('');
+  protected readonly selectedIncidentStudentIds = signal<string[]>([]);
+  protected readonly incidentGroupSchedules = signal<ManagementSchedule[]>([]);
+  protected readonly incidentGroupStudents = signal<ManagementStudent[]>([]);
+  protected readonly loadingIncidentGroupData = signal(false);
+  protected readonly incidentTab = signal<'ACTIVO' | 'RESUELTO' | 'CANCELADO' | 'TODOS'>('ACTIVO');
+  protected readonly incidentTabs: { key: 'ACTIVO' | 'RESUELTO' | 'CANCELADO' | 'TODOS'; label: string }[] = [
+    { key: 'ACTIVO', label: 'Activos' },
+    { key: 'RESUELTO', label: 'Resueltos' },
+    { key: 'CANCELADO', label: 'Cancelados' },
+    { key: 'TODOS', label: 'Todos' },
+  ];
+  protected readonly incidentDetail = signal<ManagementIncident | null>(null);
+  protected readonly incidentDetailLoading = signal(false);
 
   protected readonly deviceForm = new FormGroup({
     macAddress: new FormControl('', { nonNullable: true }),
@@ -1006,7 +1238,32 @@ export class ManagementWorkspaceComponent implements OnInit {
     classroomId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
-  protected readonly attendanceComment = new FormControl('', { nonNullable: true });
+  protected readonly editingStudent = signal(false);
+  protected readonly addingTutor = signal(false);
+  protected readonly editingTutorId = signal<string | null>(null);
+  private studentPhoto: File | null = null;
+
+  protected readonly studentForm = new FormGroup({
+    phone: new FormControl('', { nonNullable: true, validators: [Validators.pattern(/^\d{10}$/)] }),
+    address: new FormControl('', { nonNullable: true }),
+    active: new FormControl(true, { nonNullable: true }),
+  });
+
+  protected readonly tutorForm = new FormGroup({
+    firstName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    firstSurname: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    secondSurname: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    phone: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.pattern(/^\d{10}$/)] }),
+    relationship: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    isPrimary: new FormControl(false, { nonNullable: true }),
+  });
+
+  protected readonly tutorEditForm = new FormGroup({
+    phone: new FormControl('', { nonNullable: true, validators: [Validators.pattern(/^\d{10}$/)] }),
+    relationship: new FormControl('', { nonNullable: true }),
+    isPrimary: new FormControl(false, { nonNullable: true }),
+  });
+
   protected readonly claimComment = new FormControl('', { nonNullable: true });
 
   protected readonly incidentTypes = [
@@ -1033,11 +1290,6 @@ export class ManagementWorkspaceComponent implements OnInit {
     return teachers.find((teacher) => teacher.id === this.selectedTeacherId()) ?? teachers[0] ?? null;
   });
 
-  protected readonly selectedIncident = computed<ManagementIncident | null>(() => {
-    const incidents = this.snapshot().incidents;
-    return incidents.find((incident) => incident.id === this.selectedIncidentId()) ?? incidents[0] ?? null;
-  });
-
   protected readonly selectedClaim = computed<ManagementClaim | null>(() => {
     const claims = this.snapshot().claims;
     return claims.find((claim) => claim.id === this.selectedClaimId()) ?? claims[0] ?? null;
@@ -1060,10 +1312,35 @@ export class ManagementWorkspaceComponent implements OnInit {
         this.view.set((data['managementView'] as ManagementView | undefined) ?? 'students');
         this.applyParams(params);
         this.patchDeviceForm();
+        this.maybeLoadIncidentDetail();
       });
 
     this.loadSnapshot();
     this.loadClassrooms();
+  }
+
+  private maybeLoadIncidentDetail(): void {
+    if (this.view() !== 'incident-detail' && this.view() !== 'incident-attendance') {
+      return;
+    }
+
+    const id = this.selectedIncidentId() || this.snapshot().incidents[0]?.id;
+
+    if (!id || id === this.incidentDetail()?.id) {
+      return;
+    }
+
+    this.incidentDetailLoading.set(true);
+    this.managementData
+      .getIncident(id)
+      .pipe(
+        finalize(() => this.incidentDetailLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (incident) => this.incidentDetail.set(incident),
+        error: () => this.incidentDetail.set(null),
+      });
   }
 
   private loadClassrooms(): void {
@@ -1084,6 +1361,7 @@ export class ManagementWorkspaceComponent implements OnInit {
         next: (snapshot) => {
           this.snapshot.set(snapshot);
           this.patchDeviceForm();
+          this.maybeLoadIncidentDetail();
         },
         error: () => {
           this.snapshot.set(EMPTY_MANAGEMENT_SNAPSHOT);
@@ -1191,12 +1469,12 @@ export class ManagementWorkspaceComponent implements OnInit {
       case 'incident-new':
         return [root, { label: 'Incidentes', route: `${base}/incidents` }, { label: 'Nuevo' }];
       case 'incident-detail':
-        return [root, { label: 'Incidentes', route: `${base}/incidents` }, { label: this.selectedIncident()?.title ?? 'Detalle' }];
+        return [root, { label: 'Incidentes', route: `${base}/incidents` }, { label: this.incidentDetail()?.title ?? 'Detalle' }];
       case 'incident-attendance':
         return [
           root,
           { label: 'Incidentes', route: `${base}/incidents` },
-          { label: this.selectedIncident()?.title ?? 'Detalle', route: `${base}/incidents/${this.selectedIncident()?.id ?? ''}` },
+          { label: this.incidentDetail()?.title ?? 'Detalle', route: `${base}/incidents/${this.incidentDetail()?.id ?? ''}` },
           { label: 'Pase de lista' },
         ];
       case 'claim-detail':
@@ -1225,14 +1503,88 @@ export class ManagementWorkspaceComponent implements OnInit {
     return this.currentRole() === UserRole.ADMIN;
   }
 
+  protected canEditStudents(): boolean {
+    return this.currentRole() === UserRole.ADMIN;
+  }
+
   protected canCreateIncidents(): boolean {
     return this.currentRole() === UserRole.CAREER_DIRECTOR;
   }
 
   protected canCloseIncident(incident: ManagementIncident): boolean {
-    return (
-      this.currentRole() === UserRole.CAREER_DIRECTOR &&
-      incident.status.label.toLowerCase() !== 'concluido'
+    return this.currentRole() === UserRole.CAREER_DIRECTOR && incident.status.label.toUpperCase() === 'ACTIVO';
+  }
+
+  protected incidentCountByStatus(status: string): number {
+    return this.snapshot().incidents.filter((incident) => incident.status.label.toUpperCase() === status).length;
+  }
+
+  protected filteredIncidents(): ManagementIncident[] {
+    const tab = this.incidentTab();
+    const incidents = this.snapshot().incidents;
+
+    return tab === 'TODOS' ? incidents : incidents.filter((incident) => incident.status.label.toUpperCase() === tab);
+  }
+
+  protected presentCount(incident: ManagementIncident): number {
+    return incident.roster.filter((item) => item.status === 'PRESENTE' || item.status === 'SEGURO').length;
+  }
+
+  protected onIncidentGroupChange(groupId: string): void {
+    this.selectedIncidentGroupId.set(groupId);
+    this.selectedIncidentScheduleId.set('');
+    this.selectedIncidentStudentIds.set([]);
+    this.incidentGroupSchedules.set([]);
+    this.incidentGroupStudents.set([]);
+
+    if (!groupId) {
+      return;
+    }
+
+    this.loadingIncidentGroupData.set(true);
+    forkJoin({
+      schedules: this.managementData.getGroupSchedule(groupId),
+      students: this.managementData.getGroupStudentsForIncident(groupId),
+    })
+      .pipe(
+        finalize(() => this.loadingIncidentGroupData.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(({ schedules, students }) => {
+        this.incidentGroupSchedules.set(schedules);
+        this.incidentGroupStudents.set(students);
+      });
+  }
+
+  protected isIncidentStudentSelected(studentId: string): boolean {
+    return this.selectedIncidentStudentIds().includes(studentId);
+  }
+
+  protected toggleIncidentStudent(studentId: string): void {
+    this.selectedIncidentStudentIds.update((current) =>
+      current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId],
+    );
+  }
+
+  protected updateRosterStatus(studentId: string, status: IncidentRosterStatus): void {
+    this.incidentDetail.update((incident) =>
+      incident
+        ? {
+            ...incident,
+            roster: incident.roster.map((item) => (item.studentId === studentId ? { ...item, status } : item)),
+          }
+        : incident,
+    );
+  }
+
+  protected updateRosterNotes(studentId: string, notes: string): void {
+    this.incidentDetail.update((incident) =>
+      incident
+        ? {
+            ...incident,
+            roster: incident.roster.map((item) => (item.studentId === studentId ? { ...item, notes } : item)),
+          }
+        : incident,
     );
   }
 
@@ -1274,18 +1626,6 @@ export class ManagementWorkspaceComponent implements OnInit {
     return this.auditEntities.find((entity) => entity.key === this.auditEntity())?.label ?? 'Alumnos';
   }
 
-  protected rosterStatusLabel(item: ManagementIncidentRosterItem): string {
-    if (item.status === 'PRESENTE') {
-      return 'Presente';
-    }
-
-    if (item.status === 'AUSENTE') {
-      return 'Faltante';
-    }
-
-    return 'Sin confirmar';
-  }
-
   protected setIncidentEvidence(files: File[]): void {
     this.incidentForm.controls.evidence.setValue(files[0] ?? null);
   }
@@ -1295,7 +1635,9 @@ export class ManagementWorkspaceComponent implements OnInit {
   }
 
   protected submitIncident(): void {
-    if (this.incidentForm.invalid || this.submitting()) {
+    const hasSelection = Boolean(this.selectedIncidentScheduleId()) && this.selectedIncidentStudentIds().length > 0;
+
+    if (this.incidentForm.invalid || this.submitting() || !hasSelection) {
       this.incidentForm.markAllAsTouched();
       return;
     }
@@ -1304,10 +1646,8 @@ export class ManagementWorkspaceComponent implements OnInit {
     const rawPayload = this.incidentForm.getRawValue();
     const payload: IncidentCreatePayload = {
       ...rawPayload,
-      scheduleId: this.snapshot().schedules[0]?.id ?? '1',
-      studentIds: this.snapshot()
-        .students.slice(0, 5)
-        .map((student) => student.id),
+      scheduleId: this.selectedIncidentScheduleId(),
+      studentIds: this.selectedIncidentStudentIds(),
     };
 
     this.managementData
@@ -1398,38 +1738,179 @@ export class ManagementWorkspaceComponent implements OnInit {
       });
   }
 
-  protected markRoster(incidentId: string, studentId: string, status: 'PRESENTE' | 'AUSENTE'): void {
+  protected startEditingStudent(student: ManagementStudent): void {
+    this.studentForm.reset({ phone: student.phone, address: student.address, active: student.status.tone === 'success' });
+    this.studentPhoto = null;
+    this.editingStudent.set(true);
+  }
+
+  protected cancelEditingStudent(): void {
+    this.editingStudent.set(false);
+    this.studentPhoto = null;
+  }
+
+  protected selectStudentPhoto(files: File[]): void {
+    this.studentPhoto = files[0] ?? null;
+  }
+
+  protected clearStudentPhoto(): void {
+    this.studentPhoto = null;
+  }
+
+  protected saveStudent(student: ManagementStudent): void {
+    if (this.studentForm.invalid || this.submitting()) {
+      this.studentForm.markAllAsTouched();
+      return;
+    }
+
+    const { phone, address, active } = this.studentForm.getRawValue();
+
+    this.submitting.set(true);
+    this.managementData
+      .updateStudent(student.id, { phone, address, active, photo: this.studentPhoto })
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe((result) => {
+        if (result.success && result.student) {
+          this.replaceStudent(result.student);
+          this.editingStudent.set(false);
+          this.studentPhoto = null;
+          this.toastService.success('Alumno actualizado', 'Los cambios fueron guardados.');
+          return;
+        }
+
+        this.toastService.error('No se pudo guardar', result.message ?? 'No se pudo actualizar al alumno.');
+      });
+  }
+
+  protected startAddingTutor(): void {
+    this.tutorForm.reset({
+      firstName: '',
+      firstSurname: '',
+      secondSurname: '',
+      phone: '',
+      relationship: '',
+      isPrimary: false,
+    });
+    this.addingTutor.set(true);
+  }
+
+  protected cancelAddingTutor(): void {
+    this.addingTutor.set(false);
+  }
+
+  protected saveNewTutor(student: ManagementStudent): void {
+    if (this.tutorForm.invalid || this.submitting()) {
+      this.tutorForm.markAllAsTouched();
+      return;
+    }
+
+    this.submitting.set(true);
+    this.managementData
+      .addStudentTutor(student.id, this.tutorForm.getRawValue())
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe((result) => {
+        if (result.success && result.student) {
+          this.replaceStudent(result.student);
+          this.addingTutor.set(false);
+          this.toastService.success('Tutor agregado', 'El tutor se agrego correctamente.');
+          return;
+        }
+
+        this.toastService.error('No se pudo agregar', result.message ?? 'No se pudo agregar al tutor.');
+      });
+  }
+
+  protected startEditingTutor(tutor: ManagementTutor): void {
+    this.tutorEditForm.reset({ phone: tutor.phone, relationship: tutor.relationship, isPrimary: tutor.isPrimary });
+    this.editingTutorId.set(tutor.id);
+  }
+
+  protected cancelEditingTutor(): void {
+    this.editingTutorId.set(null);
+  }
+
+  protected saveTutorEdit(student: ManagementStudent, tutor: ManagementTutor): void {
+    if (this.tutorEditForm.invalid || this.submitting()) {
+      this.tutorEditForm.markAllAsTouched();
+      return;
+    }
+
+    this.submitting.set(true);
+    this.managementData
+      .updateStudentTutor(student.id, tutor.id, this.tutorEditForm.getRawValue())
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe((result) => {
+        if (result.success && result.student) {
+          this.replaceStudent(result.student);
+          this.editingTutorId.set(null);
+          this.toastService.success('Tutor actualizado', 'Los cambios fueron guardados.');
+          return;
+        }
+
+        this.toastService.error('No se pudo guardar', result.message ?? 'No se pudo actualizar al tutor.');
+      });
+  }
+
+  protected async removeTutor(student: ManagementStudent, tutor: ManagementTutor): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Quitar tutor?',
+      message: `${tutor.fullName} dejara de estar asociado a este alumno.`,
+      confirmText: 'Quitar',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-solid fa-user-shield',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.submitting.set(true);
+    this.managementData
+      .removeStudentTutor(student.id, tutor.id)
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe((result) => {
+        if (result.success && result.student) {
+          this.replaceStudent(result.student);
+          this.toastService.success('Tutor eliminado', 'El tutor ya no esta asociado a este alumno.');
+          return;
+        }
+
+        this.toastService.error('No se pudo quitar', result.message ?? 'No se pudo quitar al tutor.');
+      });
+  }
+
+  private replaceStudent(student: ManagementStudent): void {
     this.snapshot.update((snapshot) => ({
       ...snapshot,
-      incidents: snapshot.incidents.map((incident) =>
-        incident.id === incidentId
-          ? {
-              ...incident,
-              roster: incident.roster.map((item) =>
-                item.studentId === studentId ? { ...item, status } : item,
-              ),
-            }
-          : incident,
-      ),
+      students: snapshot.students.map((item) => (item.id === student.id ? student : item)),
     }));
   }
 
   protected submitEmergencyList(incident: ManagementIncident): void {
+    if (this.submitting()) {
+      return;
+    }
+
     const present = incident.roster.filter((item) => item.status === 'PRESENTE').length;
     const absent = incident.roster.filter((item) => item.status === 'AUSENTE').length;
 
-    this.managementData.updateIncidentStudents(incident, this.attendanceComment.value).subscribe((result) => {
-      if (!result.success) {
-        this.toastService.error(
-          'No se pudo guardar',
-          result.message ?? 'El pase de lista del incidente no fue actualizado.',
-        );
-        return;
-      }
+    this.submitting.set(true);
+    this.managementData
+      .updateIncidentStudents(incident.id, incident.roster)
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe((result) => {
+        if (!result.success) {
+          this.toastService.error(
+            'No se pudo guardar',
+            result.message ?? 'El pase de lista del incidente no fue actualizado.',
+          );
+          return;
+        }
 
-      this.toastService.success('Pase de lista guardado', `${present} presentes y ${absent} faltantes registrados.`);
-      void this.router.navigateByUrl(`${this.baseRoute()}/incidents/${incident.id}`);
-    });
+        this.toastService.success('Pase de lista guardado', `${present} presentes y ${absent} faltantes registrados.`);
+        void this.router.navigateByUrl(`${this.baseRoute()}/incidents/${incident.id}`);
+      });
   }
 
   protected async closeIncident(incident: ManagementIncident): Promise<void> {
@@ -1449,11 +1930,11 @@ export class ManagementWorkspaceComponent implements OnInit {
     this.managementData.closeIncident(incident.id, 'RESOLVED').subscribe((result) => {
       if (result.success) {
         this.toastService.success('Incidente concluido', 'El incidente fue cerrado correctamente.');
+        const updated = { ...incident, status: { label: 'RESUELTO', tone: 'success' as const } };
+        this.incidentDetail.set(updated);
         this.snapshot.update((snapshot) => ({
           ...snapshot,
-          incidents: snapshot.incidents.map((item) =>
-            item.id === incident.id ? { ...item, status: { label: 'Concluido', tone: 'success' } } : item,
-          ),
+          incidents: snapshot.incidents.map((item) => (item.id === incident.id ? updated : item)),
         }));
         return;
       }

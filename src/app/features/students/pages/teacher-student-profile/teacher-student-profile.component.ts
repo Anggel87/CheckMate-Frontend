@@ -55,7 +55,6 @@ import {
         <nav class="teacher-profile-tabs" aria-label="Secciones del alumno">
           <a class="is-active" [routerLink]="['/teacher/students', student().id]">Asistencias</a>
           <a [routerLink]="['/teacher/students', student().id, 'justifications']">Justificantes</a>
-          <button type="button">Calificaciones</button>
         </nav>
 
         <div class="teacher-profile-layout">
@@ -82,18 +81,28 @@ import {
                   <dd>{{ student().email }}</dd>
                 </div>
                 <div>
-                  <dt>Tutor Asignado</dt>
-                  <dd>{{ student().tutor }}</dd>
+                  <dt>Tutor Académico</dt>
+                  <dd>{{ student().academicTutor || 'Sin tutor académico asignado' }}</dd>
                 </div>
               </dl>
             </section>
 
-            <section class="teacher-emergency-contact">
-              <h2>
-                <i class="fa-solid fa-star-of-life" aria-hidden="true"></i> Contacto de Emergencia
-              </h2>
-              <p>{{ student().emergencyContact }}</p>
-              <strong>{{ student().emergencyPhone }}</strong>
+            <section class="teacher-card teacher-student-tutors-card">
+              <h2><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Tutores Legales</h2>
+
+              @if (student().tutors.length) {
+                @for (tutor of student().tutors; track tutor.id) {
+                  <div class="management-tutor-row">
+                    <div>
+                      <strong>{{ tutor.fullName }}</strong>
+                      <small>{{ tutor.relationship }}{{ tutor.isPrimary ? ' · Principal' : '' }}</small>
+                    </div>
+                    <span>{{ tutor.phone || 'Sin telefono' }}</span>
+                  </div>
+                }
+              } @else {
+                <p class="dropdown-empty">Sin tutores legales registrados.</p>
+              }
             </section>
           </aside>
         </div>

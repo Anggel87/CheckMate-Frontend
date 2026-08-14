@@ -211,9 +211,11 @@ export const TUTOR_TEACHER_ROUTES: Routes = [
       {
         path: 'profile',
         canActivate: [permissionGuard],
-        data: { permission: 'profile.view' },
-        loadChildren: () =>
-          import('../../features/profile/profile.routes').then((routes) => routes.PROFILE_ROUTES),
+        data: { permission: 'profile.view', topbarTitle: 'Mi informacion' },
+        loadComponent: () =>
+          import('../../features/profile/pages/teacher-profile/teacher-profile.component').then(
+            (component) => component.TeacherProfileComponent,
+          ),
       },
       {
         path: 'settings',

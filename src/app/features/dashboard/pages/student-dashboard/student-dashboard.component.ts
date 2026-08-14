@@ -2,6 +2,7 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../../../core/authentication/auth.service';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
 import {
@@ -106,14 +107,6 @@ import {
             </div>
           </article>
         </section>
-
-        <a
-          class="student-floating-action"
-          [routerLink]="['/student/profile']"
-          aria-label="Abrir perfil"
-        >
-          <img [src]="profile().avatarUrl" [alt]="'Foto de perfil de ' + profile().name" />
-        </a>
       }
     </section>
   `,
@@ -121,6 +114,7 @@ import {
 export class StudentDashboardComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly studentApi = inject(StudentPortalApiService);
+  private readonly authService = inject(AuthService);
 
   protected readonly loading = signal(true);
   protected readonly profile = signal<StudentProfileView>(EMPTY_STUDENT_PROFILE);
@@ -140,6 +134,7 @@ export class StudentDashboardComponent {
         this.metrics.set(dashboard.metrics);
         this.currentCourse.set(dashboard.currentCourse);
         this.quickActions.set(dashboard.quickActions);
+        this.authService.updateProfileSummary(dashboard.profile.avatarUrl, dashboard.profile.shortName);
       });
   }
 

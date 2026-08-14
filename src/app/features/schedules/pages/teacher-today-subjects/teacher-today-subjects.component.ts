@@ -74,13 +74,13 @@ import {
                     <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i>
                   </a>
                 } @else {
-                  <button
-                    type="button"
+                  <a
                     class="icon-button"
+                    [routerLink]="['/teacher/groups', classItem.groupId, 'students']"
                     [attr.aria-label]="'Ver ' + classItem.subject"
                   >
                     <i class="fa-regular fa-eye" aria-hidden="true"></i>
-                  </button>
+                  </a>
                 }
               </article>
             } @empty {

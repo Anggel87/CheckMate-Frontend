@@ -69,7 +69,6 @@ import {
               <span>Materia</span>
               <span>Hora</span>
               <span>Estado</span>
-              <span>Accion</span>
             </div>
             @for (record of records(); track record.id) {
               <div class="teacher-table__row">
@@ -77,13 +76,6 @@ import {
                 <span>{{ record.subject }}</span>
                 <span>{{ record.time }}</span>
                 <app-status-badge [label]="record.status" [tone]="record.statusTone" />
-                <button
-                  type="button"
-                  class="icon-button"
-                  [attr.aria-label]="'Ver asistencia ' + record.date"
-                >
-                  <i class="fa-regular fa-eye" aria-hidden="true"></i>
-                </button>
               </div>
             } @empty {
               <div class="teacher-table__row">

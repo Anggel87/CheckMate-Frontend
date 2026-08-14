@@ -27,10 +27,6 @@ type EmergencyMark = 'present' | 'absent' | '';
 
       <div class="teacher-emergency-layout">
         <section aria-label="Lista de alumnos">
-          <div class="teacher-tabs">
-            <button type="button" class="is-active">Todos los alumnos</button>
-          </div>
-
           <div class="teacher-emergency-student-list">
             @for (student of students(); track student.id) {
               <article
@@ -44,7 +40,9 @@ type EmergencyMark = 'present' | 'absent' | '';
                 </div>
 
                 @if (student.status) {
-                  <b>{{ student.status }}</b>
+                  <b [class.is-absent]="student.status === 'AUSENTE'">
+                    {{ student.status === 'PRESENTE' ? 'Presente' : 'Ausente' }}
+                  </b>
                 } @else {
                   <div class="teacher-emergency-mark">
                     <button
@@ -76,13 +74,11 @@ type EmergencyMark = 'present' | 'absent' | '';
 
         <aside class="teacher-side-stack">
           <section class="teacher-card teacher-comment-card">
-            <h2><i class="fa-regular fa-message" aria-hidden="true"></i> Comentarios</h2>
-            <label class="sr-only" for="emergency-comments">Comentarios</label>
-            <textarea
-              id="emergency-comments"
-              class="checkmate-textarea"
-              placeholder="Escriba notas adicionales sobre la situacion o ausencias..."
-            ></textarea>
+            <h2><i class="fa-regular fa-circle-check" aria-hidden="true"></i> Verificacion</h2>
+            <p class="teacher-help-note">
+              Marca a cada alumno como presente o ausente. Los cambios se guardan al presionar
+              "Guardar".
+            </p>
           </section>
 
           <button

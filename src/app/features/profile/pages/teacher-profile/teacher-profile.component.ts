@@ -3,7 +3,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
-import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../../core/authentication/auth.service';
 import { FileUploadComponent } from '../../../../shared/components/file-upload/file-upload.component';
 import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
@@ -12,21 +11,21 @@ import { ToastService } from '../../../../shared/feedback/services/toast.service
 import { apiErrorMessage } from '../../../../shared/utils/api-error.util';
 import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
 import {
-  EMPTY_STUDENT_PROFILE,
-  StudentPortalApiService,
-  StudentProfileView,
-} from '../../../student-portal/data-access/student-portal-api.service';
+  EMPTY_TEACHER_PROFILE,
+  TeacherPortalApiService,
+  TeacherProfileView,
+} from '../../../teacher-portal/data-access/teacher-portal-api.service';
 
 @Component({
-  selector: 'app-student-profile',
+  selector: 'app-teacher-profile',
   standalone: true,
-  imports: [RouterLink, ReactiveFormsModule, LoadingSpinnerComponent, FileUploadComponent, FormValidationMessageComponent],
+  imports: [ReactiveFormsModule, LoadingSpinnerComponent, FileUploadComponent, FormValidationMessageComponent],
   template: `
     <section class="student-page">
       <header class="student-page__header student-page__header--action">
         <div>
           <h1>Mi Informacion</h1>
-          <p>Consulta y gestiona tu perfil academico.</p>
+          <p>Consulta y gestiona tu perfil.</p>
         </div>
 
         @if (!loading() && !editing()) {
@@ -40,53 +39,34 @@ import {
       @if (loading()) {
         <app-loading-spinner label="Cargando perfil..." [showLabel]="true" />
       } @else {
-        <section class="student-profile-grid">
-          <article class="student-card student-profile-card">
-            <img
-              class="student-profile-card__avatar"
-              [src]="profile().avatarUrl"
-              [alt]="'Foto de perfil de ' + profile().name"
-            />
+        <article class="student-card student-profile-card">
+          <img
+            class="student-profile-card__avatar"
+            [src]="profile().avatarUrl"
+            [alt]="'Foto de perfil de ' + profile().name"
+          />
 
-            <div class="student-profile-card__content">
-              <h2>{{ profile().name }}</h2>
-              <p>{{ profile().role }}</p>
+          <div class="student-profile-card__content">
+            <h2>{{ profile().name }}</h2>
+            <p>{{ profile().role }}</p>
 
+            @if (profile().tutoredGroups.length) {
               <div class="student-chip-row">
                 <span class="student-info-chip">
-                  <i class="fa-solid fa-id-card-clip" aria-hidden="true"></i>
-                  <span>Matricula</span>
-                  <strong>{{ profile().enrollment }}</strong>
-                </span>
-                <span class="student-info-chip">
                   <i class="fa-solid fa-users" aria-hidden="true"></i>
-                  <span>Grupo / Carrera</span>
-                  <strong>{{ profile().groupCareer }}</strong>
+                  <span>Grupos tutorados</span>
+                  <strong>{{ profile().tutoredGroups.join(', ') }}</strong>
                 </span>
               </div>
-            </div>
-          </article>
-
-          <article class="student-card student-current-status-card">
-            <h2>
-              <i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>
-              Estado Actual
-            </h2>
-            <div class="student-progress-row">
-              <span>Asistencia Total</span>
-              <strong>{{ profile().attendanceTotal }}%</strong>
-            </div>
-            <div class="student-progress" [attr.aria-label]="'Asistencia total ' + profile().attendanceTotal + '%'">
-              <span [style.width.%]="profile().attendanceTotal"></span>
-            </div>
-          </article>
-        </section>
+            }
+          </div>
+        </article>
 
         @if (editing()) {
           <form class="student-card student-form-card" [formGroup]="editForm" (ngSubmit)="save()">
             <header>
               <h2>Editar mis datos</h2>
-              <p>Solo puedes actualizar tu foto de perfil y tu telefono. Para cambiar tu tutor legal o tu direccion, contacta a un administrador.</p>
+              <p>Solo puedes actualizar tu foto de perfil y tu telefono.</p>
             </header>
 
             <label class="student-form-field" for="profile-phone">
@@ -150,85 +130,23 @@ import {
               </span>
               <input class="checkmate-input" type="tel" [value]="profile().phone" readonly />
             </label>
-
-            <label>
-              <span>
-                <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
-                Tutor Legal
-              </span>
-              <input
-                class="checkmate-input"
-                type="text"
-                [value]="profile().guardian || 'Sin tutor legal registrado'"
-                readonly
-              />
-            </label>
-
-            <label class="student-contact-grid__wide">
-              <span>
-                <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
-                Direccion Registrada
-              </span>
-              <input
-                class="checkmate-input"
-                type="text"
-                [value]="profile().address || 'Sin direccion registrada'"
-                readonly
-              />
-            </label>
           </div>
-
-          <p class="student-help-note">
-            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-            El tutor legal y la direccion solo pueden ser actualizados por un administrador escolar.
-          </p>
         </article>
-
-        <section class="student-profile-shortcuts" aria-label="Accesos de perfil">
-          <a class="student-card student-action-row" routerLink="/student/attendance">
-            <span class="student-icon-bubble student-icon-bubble--neutral" aria-hidden="true">
-              <i class="fa-regular fa-calendar-check"></i>
-            </span>
-            <span>
-              <strong>Mis Asistencias</strong>
-              <small>Ver historial completo</small>
-            </span>
-            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-          </a>
-
-          <a class="student-card student-action-row" routerLink="/student/justifications">
-            <span class="student-icon-bubble student-icon-bubble--neutral" aria-hidden="true">
-              <i class="fa-regular fa-file-lines"></i>
-            </span>
-            <span>
-              <strong>Mis Justificantes</strong>
-              <small>Gestionar documentos</small>
-            </span>
-            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-          </a>
-        </section>
-
-        <a
-          class="btn-checkmate btn-checkmate-primary student-full-action"
-          routerLink="/student/subjects"
-        >
-          Mis materias
-        </a>
       }
     </section>
   `,
 })
-export class StudentProfileComponent {
+export class TeacherProfileComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly formBuilder = inject(FormBuilder);
   private readonly toastService = inject(ToastService);
-  private readonly studentApi = inject(StudentPortalApiService);
+  private readonly teacherApi = inject(TeacherPortalApiService);
   private readonly authService = inject(AuthService);
 
   protected readonly loading = signal(true);
   protected readonly editing = signal(false);
   protected readonly saving = signal(false);
-  protected readonly profile = signal<StudentProfileView>(EMPTY_STUDENT_PROFILE);
+  protected readonly profile = signal<TeacherProfileView>(EMPTY_TEACHER_PROFILE);
 
   private photo: File | null = null;
 
@@ -237,7 +155,7 @@ export class StudentProfileComponent {
   });
 
   constructor() {
-    this.studentApi
+    this.teacherApi
       .getProfile()
       .pipe(
         finalize(() => this.loading.set(false)),
@@ -282,7 +200,7 @@ export class StudentProfileComponent {
     const { phone } = this.editForm.getRawValue();
 
     this.saving.set(true);
-    this.studentApi
+    this.teacherApi
       .updateProfile(phone, this.photo)
       .pipe(
         finalize(() => this.saving.set(false)),
