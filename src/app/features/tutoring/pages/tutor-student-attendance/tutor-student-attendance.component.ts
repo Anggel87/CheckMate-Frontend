@@ -41,7 +41,7 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
               <span class="avatar">{{ student().initials }}</span>
             }
             <h2>{{ student().name }}</h2>
-            <p>Matricula: {{ student().enrollment }}</p>
+            <p>ID: {{ student().enrollment }}</p>
             <dl>
               <div>
                 <dt>Nivel</dt>
@@ -60,13 +60,6 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
 
           <section class="teacher-card tutor-filter-card">
             <h2>Filtrar historial</h2>
-            <label class="teacher-form-field" for="attendance-month">
-              <span class="checkmate-label">Rango de fecha</span>
-              <select id="attendance-month" class="checkmate-select">
-                <option>Junio 2024</option>
-                <option>Mayo 2024</option>
-              </select>
-            </label>
             <label class="teacher-form-field" for="attendance-status">
               <span class="checkmate-label">Estado de asistencia</span>
               <select id="attendance-status" class="checkmate-select" (change)="statusFilter.set(inputValue($event))">
@@ -74,6 +67,7 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
                 <option value="A tiempo">A tiempo</option>
                 <option value="Inasistencia">Inasistencia</option>
                 <option value="Retardo">Retardo</option>
+                <option value="Justificado">Justificado</option>
               </select>
             </label>
             <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="statusFilter.set('Todos')">
@@ -83,11 +77,18 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
         </aside>
 
         <section class="teacher-profile-main">
-          <nav class="teacher-tabs tutor-subject-tabs" aria-label="Materias">
-            <button type="button" class="is-active">Base de datos</button>
-            <button type="button">Redes</button>
-            <button type="button">Software</button>
-          </nav>
+          @if (subjects().length > 1) {
+            <nav class="teacher-tabs tutor-subject-tabs" aria-label="Materias">
+              <button type="button" [class.is-active]="subjectFilter() === 'Todas'" (click)="subjectFilter.set('Todas')">
+                Todas
+              </button>
+              @for (subject of subjects(); track subject) {
+                <button type="button" [class.is-active]="subjectFilter() === subject" (click)="subjectFilter.set(subject)">
+                  {{ subject }}
+                </button>
+              }
+            </nav>
+          }
 
           <div class="tutor-attendance-records">
             @for (record of filteredRecords(); track record.id) {
@@ -99,11 +100,12 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
               >
                 <app-status-badge [label]="record.status" [tone]="record.statusTone" />
                 <div>
-                  <strong>{{ record.status }}</strong>
+                  <strong>{{ record.subject }}</strong>
                   <span>{{ record.date }} - {{ record.time }}</span>
                 </div>
-                <b>Aula<br />{{ record.classroom }}</b>
               </a>
+            } @empty {
+              <p class="dropdown-empty">No hay registros de asistencia para este filtro.</p>
             }
           </div>
 
@@ -129,15 +131,30 @@ export class TutorStudentAttendanceComponent {
   private readonly tutoringData = inject(TutoringDataService);
 
   protected readonly statusFilter = signal('Todos');
+  protected readonly subjectFilter = signal('Todas');
   protected readonly student = computed(() =>
     this.tutoringData.studentById(this.route.snapshot.paramMap.get('studentId')),
   );
+
+  constructor() {
+    const studentId = this.route.snapshot.paramMap.get('studentId');
+
+    if (studentId) {
+      this.tutoringData.loadStudentAttendance(studentId);
+    }
+  }
   protected readonly records = computed(() => this.tutoringData.attendanceForStudent(this.student().id));
+  protected readonly subjects = computed(() =>
+    Array.from(new Set(this.records().map((record) => record.subject).filter(Boolean))),
+  );
   protected readonly filteredRecords = computed(() => {
     const status = this.statusFilter();
-    return status === 'Todos'
-      ? this.records()
-      : this.records().filter((record) => record.status === status);
+    const subject = this.subjectFilter();
+
+    return this.records().filter(
+      (record) =>
+        (status === 'Todos' || record.status === status) && (subject === 'Todas' || record.subject === subject),
+    );
   });
 
   protected inputValue(event: Event): string {

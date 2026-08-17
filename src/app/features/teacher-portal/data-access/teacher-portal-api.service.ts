@@ -78,6 +78,12 @@ export interface TeacherStudentView {
   status: string;
   statusTone: StatusBadgeTone;
   attendance: number;
+  absenceCount: number;
+  lateCount: number;
+  justificationCount: number;
+  todayPresentCount: number;
+  todayAbsentCount: number;
+  weeklyAbsenceCount: number;
   avatarUrl?: string;
 }
 
@@ -173,6 +179,20 @@ export interface TeacherStudentTutorView {
   phone: string;
   relationship: string;
   isPrimary: boolean;
+}
+
+export interface TeacherStudentTutorPayload {
+  firstName: string;
+  secondName?: string;
+  firstSurname: string;
+  secondSurname: string;
+  phone: string;
+  relationship: string;
+  isPrimary?: boolean;
+}
+
+export interface TeacherStudentNotificationResult {
+  recipientsCount: number;
 }
 
 export interface TeacherStudentProfileView {
@@ -462,6 +482,37 @@ export class TeacherPortalApiService {
     );
   }
 
+  addStudentTutor(
+    studentId: string,
+    payload: TeacherStudentTutorPayload,
+  ): Observable<TeacherStudentProfileView> {
+    return this.api
+      .post<unknown>(`/profesor/students/${studentId}/tutors`, {
+        first_name: payload.firstName,
+        second_name: payload.secondName || undefined,
+        first_surname: payload.firstSurname,
+        second_surname: payload.secondSurname,
+        phone: payload.phone,
+        relationship: payload.relationship,
+        is_primary: payload.isPrimary ?? false,
+      })
+      .pipe(map((response) => this.toStudentProfile(unwrapData(response), studentId)));
+  }
+
+  notifyStudentTutors(
+    studentId: string,
+    title: string,
+    message: string,
+  ): Observable<TeacherStudentNotificationResult> {
+    return this.api.post<unknown>(`/profesor/students/${studentId}/notify`, { title, message }).pipe(
+      map((response) => {
+        const record = toRecord(unwrapData(response));
+
+        return { recipientsCount: readNumber(record, 'recipients_count', 0) };
+      }),
+    );
+  }
+
   getStudentAttendance(studentId: string | null): Observable<TeacherAttendanceHistoryView[]> {
     if (!studentId) {
       return of([]);
@@ -556,15 +607,23 @@ export class TeacherPortalApiService {
     const attendance = readNumber(record, 'attendance_rate', 0);
     const active = readBooleanLike(record, 'active');
 
+    const id = readId(record);
+
     return {
-      id: readId(record),
+      id,
       name: readFullName(record),
       email: readString(record, 'email'),
-      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']),
+      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']) || id,
       group: this.groupLabel(group),
       status: active ? 'Activo' : 'Inactivo',
       statusTone: active ? 'present' : 'neutral',
       attendance,
+      absenceCount: readNumber(record, 'absence_count', 0),
+      lateCount: readNumber(record, 'late_count', 0),
+      justificationCount: readNumber(record, 'justification_count', 0),
+      todayPresentCount: readNumber(record, 'today_present_count', 0),
+      todayAbsentCount: readNumber(record, 'today_absent_count', 0),
+      weeklyAbsenceCount: readNumber(record, 'weekly_absence_count', 0),
       avatarUrl: readFirstString(record, ['photo_url', 'avatar_url']) || undefined,
     };
   }
@@ -742,12 +801,13 @@ export class TeacherPortalApiService {
     const tutors = rawTutors.map((item) => this.toStudentTutor(item));
     const academicTutor = toRecord(record?.['academic_tutor']);
     const name = readFullName(record);
+    const id = readId(record, fallbackId);
 
     return {
-      id: readId(record, fallbackId),
+      id,
       name,
       fullName: name,
-      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']),
+      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']) || id,
       email: readString(record, 'email'),
       group: this.groupLabel(group),
       department: readFirstString(career, ['short_name', 'name']),

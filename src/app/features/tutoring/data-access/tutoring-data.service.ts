@@ -14,6 +14,7 @@ import {
   TeacherGroupView,
   TeacherJustificationHistoryView,
   TeacherPortalApiService,
+  TeacherStudentTutorPayload,
   TeacherStudentView,
 } from '../../teacher-portal/data-access/teacher-portal-api.service';
 import {
@@ -23,6 +24,7 @@ import {
   TutorClaim,
   TutorGroup,
   TutorJustification,
+  TutorLegalGuardian,
   TutorRequestStatus,
   TutorStudent,
 } from '../models/tutoring.model';
@@ -34,6 +36,7 @@ const EMPTY_TUTOR_STUDENT: TutorStudent = {
   enrollment: '',
   email: '',
   group: '',
+  groupId: '',
   department: '',
   level: '',
   attendanceRate: 0,
@@ -41,11 +44,12 @@ const EMPTY_TUTOR_STUDENT: TutorStudent = {
   lateCount: 0,
   justificationCount: 0,
   claimCount: 0,
+  todayPresentCount: 0,
+  todayAbsentCount: 0,
+  weeklyAbsenceCount: 0,
   status: 'Sin datos',
   statusTone: 'neutral',
-  emergencyContact: '',
-  emergencyPhone: '',
-  tutor: '',
+  tutors: [],
 };
 
 const EMPTY_TUTOR_RECORD: TutorAttendanceRecord = {
@@ -55,7 +59,6 @@ const EMPTY_TUTOR_RECORD: TutorAttendanceRecord = {
   date: '',
   rawDate: '',
   time: '',
-  classroom: '',
   status: 'Inasistencia',
   statusTone: 'neutral',
   source: 'Sistema',
@@ -122,6 +125,25 @@ export class TutoringDataService {
   );
   readonly activeClaims = computed(
     () => this.claimState().filter((item) => item.status !== 'Aprobado').length,
+  );
+
+  readonly todayAttendanceSummary = computed(() => {
+    const students = this.students();
+    const present = students.reduce((sum, student) => sum + student.todayPresentCount, 0);
+    const absent = students.reduce((sum, student) => sum + student.todayAbsentCount, 0);
+    const total = present + absent;
+
+    return {
+      present,
+      absent,
+      rate: total ? Math.round((present / total) * 100) : 0,
+    };
+  });
+
+  readonly weeklyAbsenceAlerts = computed(() =>
+    this.students()
+      .filter((student) => student.weeklyAbsenceCount >= 3)
+      .map((student) => ({ student, count: student.weeklyAbsenceCount })),
   );
 
   constructor() {
@@ -201,9 +223,31 @@ export class TutoringDataService {
     }
 
     return this.api.post<unknown>(`/tutor/students/${studentId}/justifications`, formData).pipe(
-      tap(() => this.loadStudentDetails(this.students())),
+      tap(() => {
+        this.loadStudentAttendance(studentId);
+        this.loadStudentJustifications(studentId);
+      }),
       map(() => true),
     );
+  }
+
+  createTutor(studentId: string, payload: TeacherStudentTutorPayload): Observable<boolean> {
+    return this.teacherApi.addStudentTutor(studentId, payload).pipe(
+      tap((profile) => {
+        this.studentState.update((students) =>
+          students.map((student) =>
+            student.id === studentId ? { ...student, tutors: profile.tutors.map((item) => this.toLegalGuardian(item)) } : student,
+          ),
+        );
+      }),
+      map(() => true),
+    );
+  }
+
+  notifyTutors(studentId: string, title: string, message: string): Observable<number> {
+    return this.teacherApi
+      .notifyStudentTutors(studentId, title, message)
+      .pipe(map((result) => result.recipientsCount));
   }
 
   updateClaimStatus(id: string, status: TutorRequestStatus, comment = ''): Observable<boolean> {
@@ -256,45 +300,61 @@ export class TutoringDataService {
             ),
           ),
         ).subscribe((studentGroups) => {
-          const students = studentGroups.flat();
-          this.studentState.set(students);
-          this.loadStudentDetails(students);
+          this.studentState.set(studentGroups.flat());
         });
       });
   }
 
-  private loadStudentDetails(students: readonly TutorStudent[]): void {
-    if (!students.length) {
-      this.attendanceState.set([]);
-      this.justificationState.set([]);
-      return;
-    }
+  /**
+   * Attendance/justification counts for the list and dashboard come pre-aggregated from
+   * the groups/students endpoint. Full per-record history is only needed once a specific
+   * student's attendance, calendar or justifications view is opened, so it's fetched lazily
+   * here instead of upfront for every tutored student.
+   */
+  loadStudentAttendance(studentId: string): void {
+    this.teacherApi
+      .getStudentAttendance(studentId)
+      .pipe(
+        map((records) => records.map((record) => this.toTutorAttendance(record, studentId))),
+        catchError(() => of([] as TutorAttendanceRecord[])),
+      )
+      .subscribe((records) => {
+        this.attendanceState.update((current) => [
+          ...current.filter((record) => record.studentId !== studentId),
+          ...records,
+        ]);
+      });
+  }
 
-    forkJoin(
-      students.map((student) =>
-        this.teacherApi.getStudentAttendance(student.id).pipe(
-          map((records) => records.map((record) => this.toTutorAttendance(record, student.id))),
-          catchError(() => of([])),
-        ),
-      ),
-    ).subscribe((recordGroups) => {
-      const records = recordGroups.flat();
-      this.attendanceState.set(records);
-      this.applyAttendanceCounts(records);
-    });
+  loadStudentJustifications(studentId: string): void {
+    const student = this.studentById(studentId);
 
-    forkJoin(
-      students.map((student) =>
-        this.teacherApi.getStudentJustifications(student.id).pipe(
-          map((items) => items.map((item) => this.toTutorJustification(item, student))),
-          catchError(() => of([])),
-        ),
-      ),
-    ).subscribe((justificationGroups) => {
-      const justifications = justificationGroups.flat();
-      this.justificationState.set(justifications);
-      this.applyJustificationCounts(justifications);
-    });
+    this.teacherApi
+      .getStudentJustifications(studentId)
+      .pipe(
+        map((items) => items.map((item) => this.toTutorJustification(item, student))),
+        catchError(() => of([] as TutorJustification[])),
+      )
+      .subscribe((justifications) => {
+        this.justificationState.update((current) => [
+          ...current.filter((item) => item.studentId !== studentId),
+          ...justifications,
+        ]);
+      });
+  }
+
+  loadStudentTutors(studentId: string): void {
+    this.teacherApi
+      .getStudentProfile(studentId)
+      .pipe(
+        map((profile) => profile.tutors.map((item) => this.toLegalGuardian(item))),
+        catchError(() => of([] as TutorLegalGuardian[])),
+      )
+      .subscribe((tutors) => {
+        this.studentState.update((current) =>
+          current.map((student) => (student.id === studentId ? { ...student, tutors } : student)),
+        );
+      });
   }
 
   private loadClaims(): void {
@@ -326,19 +386,31 @@ export class TutoringDataService {
       enrollment: student.enrollment,
       email: student.email,
       group: student.group || group.group,
+      groupId: group.id,
       department: group.career,
       level: group.subject,
       attendanceRate: student.attendance,
-      absenceCount: 0,
-      lateCount: 0,
-      justificationCount: 0,
+      absenceCount: student.absenceCount,
+      lateCount: student.lateCount,
+      justificationCount: student.justificationCount,
       claimCount: 0,
+      todayPresentCount: student.todayPresentCount,
+      todayAbsentCount: student.todayAbsentCount,
+      weeklyAbsenceCount: student.weeklyAbsenceCount,
       status: student.status,
       statusTone: student.statusTone,
       avatarUrl: student.avatarUrl,
-      emergencyContact: '',
-      emergencyPhone: '',
-      tutor: '',
+      tutors: [],
+    };
+  }
+
+  private toLegalGuardian(item: { id: string; fullName: string; phone: string; relationship: string; isPrimary: boolean }): TutorLegalGuardian {
+    return {
+      id: item.id,
+      fullName: item.fullName,
+      phone: item.phone,
+      relationship: item.relationship,
+      isPrimary: item.isPrimary,
     };
   }
 
@@ -353,7 +425,6 @@ export class TutoringDataService {
       date: record.date,
       rawDate: record.rawDate,
       time: record.time,
-      classroom: '',
       status: this.toTutorAttendanceStatus(record.status),
       statusTone: record.statusTone,
       source: 'Sistema',
@@ -412,38 +483,6 @@ export class TutoringDataService {
       evidenceLabel: evidenceUrl || 'Sin evidencia adjunta',
       timeline: [],
     };
-  }
-
-  private applyAttendanceCounts(records: readonly TutorAttendanceRecord[]): void {
-    this.studentState.update((students) =>
-      students.map((student) => {
-        const studentRecords = records.filter((record) => record.studentId === student.id);
-        const absenceCount = studentRecords.filter((record) => record.status === 'Inasistencia').length;
-        const lateCount = studentRecords.filter((record) => record.status === 'Retardo').length;
-        const presentCount = studentRecords.filter(
-          (record) => record.status === 'A tiempo' || record.status === 'Justificado',
-        ).length;
-        const attendanceRate = studentRecords.length
-          ? Math.round((presentCount / studentRecords.length) * 100)
-          : student.attendanceRate;
-
-        return {
-          ...student,
-          absenceCount,
-          lateCount,
-          attendanceRate,
-        };
-      }),
-    );
-  }
-
-  private applyJustificationCounts(justifications: readonly TutorJustification[]): void {
-    this.studentState.update((students) =>
-      students.map((student) => ({
-        ...student,
-        justificationCount: justifications.filter((item) => item.studentId === student.id).length,
-      })),
-    );
   }
 
   private applyClaimCounts(claims: readonly TutorClaim[]): void {

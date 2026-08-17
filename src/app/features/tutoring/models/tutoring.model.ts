@@ -22,6 +22,14 @@ export interface TutorGroup {
   attendanceRate: number;
 }
 
+export interface TutorLegalGuardian {
+  id: string;
+  fullName: string;
+  phone: string;
+  relationship: string;
+  isPrimary: boolean;
+}
+
 export interface TutorStudent {
   id: string;
   name: string;
@@ -29,6 +37,7 @@ export interface TutorStudent {
   enrollment: string;
   email: string;
   group: string;
+  groupId: string;
   department: string;
   level: string;
   attendanceRate: number;
@@ -36,12 +45,13 @@ export interface TutorStudent {
   lateCount: number;
   justificationCount: number;
   claimCount: number;
+  todayPresentCount: number;
+  todayAbsentCount: number;
+  weeklyAbsenceCount: number;
   status: string;
   statusTone: TutorBadgeTone;
   avatarUrl?: string;
-  emergencyContact: string;
-  emergencyPhone: string;
-  tutor: string;
+  tutors: TutorLegalGuardian[];
 }
 
 export interface TutorAttendanceRecord {
@@ -51,7 +61,6 @@ export interface TutorAttendanceRecord {
   date: string;
   rawDate: string;
   time: string;
-  classroom: string;
   status: TutorAttendanceStatus;
   statusTone: TutorBadgeTone;
   source: string;

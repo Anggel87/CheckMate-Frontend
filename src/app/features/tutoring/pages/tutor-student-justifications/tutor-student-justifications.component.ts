@@ -26,7 +26,7 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
         }
         <div>
           <h1>{{ student().name }}</h1>
-          <p>Matricula: {{ student().enrollment }} - Grupo: {{ student().group }}</p>
+          <p>ID: {{ student().enrollment }} - Grupo: {{ student().group }}</p>
         </div>
       </article>
 
@@ -80,6 +80,15 @@ export class TutorStudentJustificationsComponent {
   protected readonly student = computed(() =>
     this.tutoringData.studentById(this.route.snapshot.paramMap.get('studentId')),
   );
+
+  constructor() {
+    const studentId = this.route.snapshot.paramMap.get('studentId');
+
+    if (studentId) {
+      this.tutoringData.loadStudentJustifications(studentId);
+    }
+  }
+
   protected readonly records = computed(() =>
     this.tutoringData
       .justifications()

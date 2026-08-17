@@ -30,6 +30,19 @@ import { TutoringDataService } from '../../data-access/tutoring-data.service';
         </div>
       </header>
 
+      @if (riskFilter()) {
+        <div class="tutor-alert-card tutor-risk-banner">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          <div>
+            <h2>Filtrando por riesgo de inasistencia</h2>
+            <p>Mostrando solo alumnos con 3 o mas faltas esta semana.</p>
+          </div>
+          <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="riskFilter.set(false)">
+            Quitar filtro
+          </button>
+        </div>
+      }
+
       <div class="teacher-tabs tutor-filter-tabs" aria-label="Filtro por grupo">
         <button
           type="button"
@@ -117,22 +130,27 @@ export class TutorStudentsComponent {
   protected readonly students = this.tutoringData.students;
   protected readonly search = signal('');
   protected readonly activeGroup = signal(this.route.snapshot.queryParamMap.get('group') ?? 'Todos');
+  protected readonly riskFilter = signal(this.route.snapshot.queryParamMap.get('risk') === 'attendance');
   protected readonly groups = computed(() =>
     Array.from(new Set(this.students().map((student) => student.group))),
   );
   protected readonly filteredStudents = computed(() => {
     const term = this.search().trim().toLowerCase();
     const group = this.activeGroup();
+    const atRiskIds = this.riskFilter()
+      ? new Set(this.tutoringData.weeklyAbsenceAlerts().map((alert) => alert.student.id))
+      : null;
 
     return this.students().filter((student) => {
       const matchesGroup = group === 'Todos' || student.group === group;
+      const matchesRisk = atRiskIds === null || atRiskIds.has(student.id);
       const matchesTerm =
         term.length === 0 ||
         student.name.toLowerCase().includes(term) ||
         student.enrollment.toLowerCase().includes(term) ||
         student.group.toLowerCase().includes(term);
 
-      return matchesGroup && matchesTerm;
+      return matchesGroup && matchesRisk && matchesTerm;
     });
   });
 

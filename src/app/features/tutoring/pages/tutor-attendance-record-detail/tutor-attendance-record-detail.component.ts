@@ -83,12 +83,12 @@ import {
                 <dd>{{ student().name }}</dd>
               </div>
               <div>
-                <dt>Matricula</dt>
+                <dt>ID de alumno</dt>
                 <dd>{{ student().enrollment }}</dd>
               </div>
               <div>
-                <dt>Aula</dt>
-                <dd>{{ record().classroom }}</dd>
+                <dt>Grupo</dt>
+                <dd>{{ student().group }}</dd>
               </div>
             </dl>
           </section>
@@ -104,6 +104,15 @@ export class TutorAttendanceRecordDetailComponent {
   protected readonly student = computed(() =>
     this.tutoringData.studentById(this.route.snapshot.paramMap.get('studentId')),
   );
+
+  constructor() {
+    const studentId = this.route.snapshot.paramMap.get('studentId');
+
+    if (studentId) {
+      this.tutoringData.loadStudentAttendance(studentId);
+    }
+  }
+
   protected readonly record = computed(
     () =>
       this.tutoringData.attendanceById(this.route.snapshot.paramMap.get('recordId')) ??
