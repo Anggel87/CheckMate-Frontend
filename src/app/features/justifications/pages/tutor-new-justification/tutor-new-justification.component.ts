@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -15,6 +15,7 @@ import {
 } from '../../../../shared/utils/form.utils';
 import { apiErrorMessage, apiFieldErrors } from '../../../../shared/utils/api-error.util';
 import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data.service';
+import { TutorStudent } from '../../../tutoring/models/tutoring.model';
 
 type TutorJustificationControl = 'studentId' | 'attendanceRecordId' | 'type' | 'reason';
 
@@ -43,22 +44,49 @@ const JUSTIFICATION_TYPES = [
       </header>
 
       <form class="teacher-card tutor-form-card" [formGroup]="form" (ngSubmit)="submit()">
-        <label class="teacher-form-field" for="tutor-justification-student">
-          <span class="checkmate-label">Alumno a justificar <span>*</span></span>
-          <select
-            id="tutor-justification-student"
-            class="checkmate-select"
-            formControlName="studentId"
-            [class.is-invalid]="errorFor('studentId', 'Alumno')"
-            (change)="syncAttendanceSelection()"
-          >
-            <option value="">Selecciona alumno</option>
-            @for (student of students(); track student.id) {
-              <option [value]="student.id">{{ student.name }} - {{ student.group }}</option>
-            }
-          </select>
-          <app-form-validation-message [message]="errorFor('studentId', 'Alumno')" />
-        </label>
+        <div class="tutor-student-picker-filters">
+          <label class="teacher-form-field tutor-combobox-field" for="tutor-justification-student">
+            <span class="checkmate-label">Alumno a justificar <span>*</span></span>
+            <div class="tutor-combobox">
+              <input
+                id="tutor-justification-student"
+                class="checkmate-input"
+                type="text"
+                autocomplete="off"
+                placeholder="Escribe el nombre del alumno..."
+                [class.is-invalid]="errorFor('studentId', 'Alumno')"
+                [value]="studentQuery()"
+                (input)="onStudentQueryInput($event)"
+                (focus)="studentPanelOpen.set(true)"
+                (blur)="studentPanelOpen.set(false)"
+              />
+              @if (studentPanelOpen()) {
+                <ul class="tutor-combobox-panel">
+                  @for (student of filteredStudents(); track student.id) {
+                    <li>
+                      <button type="button" (mousedown)="$event.preventDefault()" (click)="selectStudent(student)">
+                        {{ student.name }} - {{ student.group }}
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="dropdown-empty">Ningun alumno coincide con la busqueda.</li>
+                  }
+                </ul>
+              }
+            </div>
+            <app-form-validation-message [message]="errorFor('studentId', 'Alumno')" />
+          </label>
+
+          <label class="teacher-form-field">
+            <span class="checkmate-label">Grupo</span>
+            <select class="checkmate-select" (change)="studentGroupFilter.set(inputValue($event))">
+              <option value="Todos">Todos los grupos</option>
+              @for (group of studentGroups(); track group) {
+                <option [value]="group">{{ group }}</option>
+              }
+            </select>
+          </label>
+        </div>
 
         <label class="teacher-form-field" for="tutor-justification-attendance">
           <span class="checkmate-label">Ausencia a justificar <span>*</span></span>
@@ -70,9 +98,12 @@ const JUSTIFICATION_TYPES = [
           >
             <option value="">Selecciona registro</option>
             @for (record of attendanceOptions(); track record.id) {
-              <option [value]="record.id">{{ record.subject }} - {{ record.date }} - {{ record.status }}</option>
+              <option [value]="record.id">{{ record.subject }} - {{ record.date }}</option>
             }
           </select>
+          @if (form.controls.studentId.value && attendanceOptions().length === 0) {
+            <p class="teacher-help-note">Este alumno no tiene faltas pendientes de justificar.</p>
+          }
           <app-form-validation-message [message]="errorFor('attendanceRecordId', 'Ausencia')" />
         </label>
 
@@ -149,6 +180,23 @@ export class TutorNewJustificationComponent {
   private readonly toastService = inject(ToastService);
 
   protected readonly students = this.tutoringData.students;
+  protected readonly studentQuery = signal('');
+  protected readonly studentPanelOpen = signal(false);
+  protected readonly studentGroupFilter = signal('Todos');
+  protected readonly studentGroups = computed(() =>
+    Array.from(new Set(this.students().map((student) => student.group))),
+  );
+  protected readonly filteredStudents = computed(() => {
+    const term = this.studentQuery().trim().toLowerCase();
+    const group = this.studentGroupFilter();
+
+    return this.students().filter((student) => {
+      const matchesGroup = group === 'Todos' || student.group === group;
+      const matchesTerm = term.length === 0 || student.name.toLowerCase().includes(term);
+
+      return matchesGroup && matchesTerm;
+    });
+  });
   protected readonly saving = signal(false);
   private evidence: File | null = null;
   protected readonly justificationTypes = JUSTIFICATION_TYPES;
@@ -161,14 +209,61 @@ export class TutorNewJustificationComponent {
     type: ['Medico', Validators.required],
     reason: ['', [Validators.required, Validators.maxLength(500)]],
   });
+
+  constructor() {
+    const studentId = this.form.controls.studentId.value;
+
+    if (studentId) {
+      this.tutoringData.loadStudentAttendance(studentId);
+
+      const preselected = this.students().find((student) => student.id === studentId);
+
+      if (preselected) {
+        this.studentQuery.set(`${preselected.name} - ${preselected.group}`);
+      }
+    }
+  }
+
+  protected inputValue(event: Event): string {
+    return (event.target as HTMLInputElement | HTMLSelectElement).value;
+  }
+
+  protected onStudentQueryInput(event: Event): void {
+    this.studentQuery.set(this.inputValue(event));
+    this.studentPanelOpen.set(true);
+
+    if (this.form.controls.studentId.value) {
+      this.form.controls.studentId.setValue('');
+      this.syncAttendanceSelection();
+    }
+  }
+
+  protected selectStudent(student: TutorStudent): void {
+    this.form.controls.studentId.setValue(student.id);
+    this.studentQuery.set(`${student.name} - ${student.group}`);
+    this.studentPanelOpen.set(false);
+    this.syncAttendanceSelection();
+  }
+
   protected attendanceOptions() {
     const studentId = this.form.controls.studentId.value;
-    return studentId
-      ? this.tutoringData.attendanceForStudent(studentId)
-      : this.tutoringData.attendanceRecords();
+
+    if (!studentId) {
+      return [];
+    }
+
+    return this.tutoringData
+      .attendanceForStudent(studentId)
+      .filter((record) => record.status === 'Inasistencia');
   }
 
   protected syncAttendanceSelection(): void {
+    const studentId = this.form.controls.studentId.value;
+
+    if (studentId) {
+      this.tutoringData.loadStudentAttendance(studentId);
+    }
+
     const currentRecord = this.form.controls.attendanceRecordId.value;
     const valid = this.attendanceOptions().some((record) => record.id === currentRecord);
 
@@ -198,7 +293,7 @@ export class TutorNewJustificationComponent {
 
     const confirmed = await this.dialogService.confirm({
       title: 'Registrar justificante?',
-      message: 'El justificante quedara pendiente de revision por el director de carrera.',
+      message: 'El justificante quedara pendiente hasta que lo revises desde la lista de justificantes.',
       confirmText: 'Enviar',
       cancelText: 'Cancelar',
       variant: 'default',

@@ -1,18 +1,21 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import { FormValidationMessageComponent } from '../../../../shared/feedback/components/form-validation-message/form-validation-message.component';
 import { DialogService } from '../../../../shared/feedback/services/dialog.service';
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import { apiErrorMessage } from '../../../../shared/utils/api-error.util';
+import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/utils/form.utils';
 import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data.service';
 
 @Component({
   selector: 'app-tutor-claim-detail',
   standalone: true,
-  imports: [RouterLink, StatusBadgeComponent],
+  imports: [RouterLink, StatusBadgeComponent, ReactiveFormsModule, FormValidationMessageComponent],
   template: `
     <section class="teacher-page">
       <header class="teacher-detail-actions">
@@ -22,7 +25,7 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
           <strong>Detalle de reclamacion - {{ claim().studentName }} {{ claim().group }}</strong>
         </nav>
         <div>
-          <app-status-badge [label]="claim().priority" tone="danger" />
+          <app-status-badge [label]="claim().status" [tone]="claim().statusTone" />
           <app-status-badge [label]="'ID: #' + claim().id" tone="neutral" />
         </div>
       </header>
@@ -36,19 +39,78 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
         <aside class="teacher-side-stack">
           <section class="teacher-card tutor-claim-evidence">
             <h2><i class="fa-solid fa-paperclip" aria-hidden="true"></i> Evidencia</h2>
-            <div class="tutor-evidence-preview" aria-hidden="true">
-              <i class="fa-regular fa-file-lines"></i>
-              <span>Reclamaciones</span>
-            </div>
-            <p>{{ claim().evidenceLabel }}</p>
+            @if (claim().evidenceUrl) {
+              <a class="btn-checkmate btn-checkmate-secondary" [href]="claim().evidenceUrl" target="_blank" rel="noopener">
+                <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+                Ver evidencia
+              </a>
+            } @else {
+              <p class="dropdown-empty">Sin evidencia adjunta.</p>
+            }
           </section>
 
           <section class="teacher-card tutor-recurrent-card">
             <span class="avatar">{{ claim().studentName.slice(0, 2).toUpperCase() }}</span>
             <div>
               <strong>{{ claim().studentName }}</strong>
-              <small>Grupo: {{ claim().group }} (Matutino)</small>
+              <small>Grupo: {{ claim().group }}</small>
             </div>
+          </section>
+
+          <section class="teacher-card teacher-student-tutors-card">
+            <h2><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Tutores Legales</h2>
+
+            @if (student().tutors.length) {
+              @for (tutor of student().tutors; track tutor.id) {
+                <div class="management-tutor-row">
+                  <div>
+                    <strong>{{ tutor.fullName }}</strong>
+                    <small>{{ tutor.relationship }}{{ tutor.isPrimary ? ' - Principal' : '' }}</small>
+                  </div>
+                  <span>{{ tutor.phone || 'Sin telefono' }}</span>
+                </div>
+              }
+            } @else {
+              <p class="dropdown-empty">Sin tutores legales registrados.</p>
+            }
+
+            <div class="tutor-legal-actions">
+              <button type="button" class="btn-checkmate btn-checkmate-primary" (click)="toggleMessage()">
+                <i class="fa-regular fa-paper-plane" aria-hidden="true"></i>
+                Notificar sobre este reclamo
+              </button>
+            </div>
+
+            @if (sendingMessage()) {
+              <form class="tutor-inline-form" [formGroup]="messageForm" (ngSubmit)="submitMessage()">
+                <label class="teacher-form-field" for="message-title">
+                  <span class="checkmate-label">Titulo del aviso</span>
+                  <input id="message-title" class="checkmate-input" type="text" formControlName="title" />
+                  <app-form-validation-message [message]="messageError('title', 'Titulo')" />
+                </label>
+                <label class="teacher-form-field" for="message-body">
+                  <span class="checkmate-label">Mensaje</span>
+                  <textarea id="message-body" class="checkmate-textarea" formControlName="message"></textarea>
+                  <app-form-validation-message [message]="messageError('message', 'Mensaje')" />
+                </label>
+                <p class="teacher-help-note">
+                  Se enviara por WhatsApp a los tutores del alumno que tengan notificaciones activas.
+                </p>
+                <footer class="student-form-actions">
+                  <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="toggleMessage()">
+                    Cancelar
+                  </button>
+                  <button type="submit" class="btn-checkmate btn-checkmate-primary" [disabled]="sendingRequest()">
+                    @if (sendingRequest()) {
+                      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                      Enviando...
+                    } @else {
+                      Enviar
+                    }
+                  </button>
+                </footer>
+              </form>
+            }
           </section>
         </aside>
 
@@ -63,36 +125,37 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
           </article>
         </section>
 
-        <section class="teacher-card tutor-claim-actions">
-          <button type="button" class="btn-checkmate btn-checkmate-danger" [disabled]="saving()" (click)="reject()">
-            <i class="fa-solid fa-ban" aria-hidden="true"></i>
-            Rechazar
-          </button>
-          <button type="button" class="btn-checkmate btn-checkmate-success" [disabled]="saving()" (click)="startFollowUp()">
-            <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
-            Seguimiento
-          </button>
-          <a class="btn-checkmate btn-checkmate-warning" [href]="'mailto:tutorias@checkmate.edu.mx?subject=' + claim().id">
-            <i class="fa-regular fa-message" aria-hidden="true"></i>
-            Contactar
-          </a>
-          <button type="button" class="btn-checkmate btn-checkmate-primary" [disabled]="saving()" (click)="closeClaim()">
-            <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
-            Concluir reclamacion
-          </button>
-        </section>
+        @if (claim().lastAction; as lastAction) {
+          <section class="teacher-card tutor-claim-last-action">
+            <h2>Ultima actualizacion</h2>
+            <p>
+              <strong>{{ lastAction.by || 'Sistema' }}</strong>
+              <span> - {{ lastAction.at }}</span>
+            </p>
+            @if (lastAction.comment) {
+              <p class="teacher-help-note">{{ lastAction.comment }}</p>
+            }
+          </section>
+        }
 
-        <section class="tutor-claim-timeline">
-          <h2>Historial de la reclamacion</h2>
-          @for (item of claim().timeline; track item.title) {
-            <article>
-              <span></span>
-              <div>
-                <strong>{{ item.title }}</strong>
-                <small>{{ item.date }}</small>
-                <p>{{ item.description }}</p>
-              </div>
-            </article>
+        <section class="teacher-card tutor-claim-actions">
+          @if (isResolved()) {
+            <p class="teacher-help-note">Este reclamo ya fue {{ claim().status === 'Aprobado' ? 'concluido' : 'rechazado' }}.</p>
+          } @else {
+            <button type="button" class="btn-checkmate btn-checkmate-danger" [disabled]="saving()" (click)="reject()">
+              <i class="fa-solid fa-ban" aria-hidden="true"></i>
+              Rechazar
+            </button>
+            @if (canFollowUp()) {
+              <button type="button" class="btn-checkmate btn-checkmate-success" [disabled]="saving()" (click)="startFollowUp()">
+                <i class="fa-solid fa-code-branch" aria-hidden="true"></i>
+                Seguimiento
+              </button>
+            }
+            <button type="button" class="btn-checkmate btn-checkmate-primary" [disabled]="saving()" (click)="closeClaim()">
+              <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+              Concluir reclamacion
+            </button>
           }
         </section>
       </div>
@@ -102,14 +165,77 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
 export class TutorClaimDetailComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly formBuilder = inject(FormBuilder);
   private readonly tutoringData = inject(TutoringDataService);
   private readonly dialogService = inject(DialogService);
   private readonly toastService = inject(ToastService);
 
   protected readonly saving = signal(false);
+  protected readonly sendingMessage = signal(false);
+  protected readonly sendingRequest = signal(false);
+
   protected readonly claim = computed(() =>
     this.tutoringData.claimById(this.route.snapshot.paramMap.get('claimId')),
   );
+  protected readonly student = computed(() => this.tutoringData.studentById(this.claim().studentId));
+  protected readonly canFollowUp = computed(() => this.claim().status === 'Pendiente');
+  protected readonly isResolved = computed(
+    () => this.claim().status === 'Aprobado' || this.claim().status === 'Rechazado',
+  );
+
+  protected readonly messageForm = this.formBuilder.nonNullable.group({
+    title: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(90)]],
+    message: ['', [Validators.required, Validators.maxLength(350)]],
+  });
+
+  private loadedTutorsForStudentId: string | null = null;
+
+  constructor() {
+    effect(() => {
+      const studentId = this.claim().studentId;
+
+      if (studentId && studentId !== this.loadedTutorsForStudentId) {
+        this.loadedTutorsForStudentId = studentId;
+        this.tutoringData.loadStudentTutors(studentId);
+      }
+    });
+  }
+
+  protected toggleMessage(): void {
+    this.messageForm.reset({ title: '', message: '' });
+    this.sendingMessage.update((value) => !value);
+  }
+
+  protected messageError(control: keyof typeof this.messageForm.controls, label: string): string {
+    return controlErrorMessage(this.messageForm.controls[control], label);
+  }
+
+  protected submitMessage(): void {
+    markFormGroupTouched(this.messageForm);
+
+    if (this.messageForm.invalid) {
+      return;
+    }
+
+    const value = this.messageForm.getRawValue();
+
+    this.sendingRequest.set(true);
+    this.tutoringData
+      .notifyTutors(this.student().id, value.title, value.message)
+      .pipe(
+        finalize(() => this.sendingRequest.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (recipientsCount) => {
+          this.toastService.success('Mensaje enviado', `Se notifico a ${recipientsCount} tutor(es).`);
+          this.sendingMessage.set(false);
+        },
+        error: (error: HttpErrorResponse) => {
+          this.toastService.error('No se pudo enviar', apiErrorMessage(error, 'Intenta nuevamente.'));
+        },
+      });
+  }
 
   protected async reject(): Promise<void> {
     const confirmed = await this.dialogService.confirm({

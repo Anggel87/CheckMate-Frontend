@@ -81,13 +81,37 @@ export const TUTOR_TEACHER_ROUTES: Routes = [
           ),
       },
       {
-        path: 'attendance',
+        path: 'schedule',
         canActivate: [permissionGuard],
-        data: { permission: 'attendance.view', topbarTitle: 'Asistencias' },
+        data: { permission: 'schedule.view', topbarTitle: 'Tus materias de hoy' },
         loadComponent: () =>
           import(
-            '../../features/tutoring/pages/tutor-attendance-overview/tutor-attendance-overview.component'
-          ).then((component) => component.TutorAttendanceOverviewComponent),
+            '../../features/schedules/pages/teacher-today-subjects/teacher-today-subjects.component'
+          ).then((component) => component.TeacherTodaySubjectsComponent),
+      },
+      { path: 'schedules', pathMatch: 'full', redirectTo: 'schedule' },
+      {
+        path: 'attendance',
+        canActivate: [permissionGuard],
+        data: { permission: 'attendance.view' },
+        children: [
+          {
+            path: '',
+            data: { topbarTitle: 'Asistencias' },
+            loadComponent: () =>
+              import(
+                '../../features/tutoring/pages/tutor-attendance-overview/tutor-attendance-overview.component'
+              ).then((component) => component.TutorAttendanceOverviewComponent),
+          },
+          {
+            path: 'take/:classId',
+            data: { topbarTitle: 'Pasar lista' },
+            loadComponent: () =>
+              import(
+                '../../features/attendance/pages/teacher-take-attendance/teacher-take-attendance.component'
+              ).then((component) => component.TeacherTakeAttendanceComponent),
+          },
+        ],
       },
       {
         path: 'claims',

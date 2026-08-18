@@ -59,8 +59,15 @@ import {
               <app-status-badge [label]="record().status" [tone]="record().statusTone" />
             </div>
             <div>
+              <span>Horario de clase</span>
+              <strong>{{ record().classTimeRange }}</strong>
+            </div>
+            <div>
               <span>Hora registrada</span>
               <strong>{{ record().time }}</strong>
+              @if (record().checkInDelayLabel) {
+                <small>{{ record().checkInDelayLabel }}</small>
+              }
             </div>
             <div>
               <span>Fuente</span>

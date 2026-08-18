@@ -54,7 +54,7 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
             </div>
             <div>
               <span>Profesor</span>
-              <strong>{{ justification().teacher }}</strong>
+              <strong>{{ justification().teacher || 'No disponible' }}</strong>
             </div>
             <div>
               <span>Fecha de ausencia</span>
@@ -76,19 +76,21 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
           </section>
 
           <section class="tutor-attachment-section">
-            <h2>Archivos adjuntos ({{ justification().attachments.length }})</h2>
-            <div class="tutor-attachment-grid">
-              @for (file of justification().attachments; track file.name) {
-                <button type="button" class="tutor-attachment-card" (click)="downloadAttachment(file.name)">
-                  <i [class]="file.icon" aria-hidden="true"></i>
-                  <span>
-                    <strong>{{ file.name }}</strong>
-                    <small>{{ file.size }}</small>
-                  </span>
-                  <i class="fa-solid fa-download" aria-hidden="true"></i>
-                </button>
-              }
-            </div>
+            <h2>Evidencia</h2>
+            @if (justification().evidenceUrl) {
+              <a
+                class="tutor-attachment-card"
+                [href]="justification().evidenceUrl"
+                target="_blank"
+                rel="noopener"
+              >
+                <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+                <span><strong>Ver evidencia adjunta</strong></span>
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+              </a>
+            } @else {
+              <p class="dropdown-empty">Sin evidencia adjunta.</p>
+            }
           </section>
 
           <section class="tutor-resolution-box">
@@ -124,20 +126,20 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
 
         <aside class="teacher-side-stack">
           <section class="teacher-card tutor-observations-card">
-            <h2><i class="fa-regular fa-message" aria-hidden="true"></i> Observaciones</h2>
-            @if (justification().observations.length === 0) {
-              <p class="dropdown-empty">Sin observaciones registradas.</p>
+            <h2><i class="fa-regular fa-message" aria-hidden="true"></i> Revision</h2>
+            @if (justification().review; as review) {
+              <article class="tutor-observation">
+                <span class="avatar">{{ review.by.slice(0, 2).toUpperCase() }}</span>
+                <div>
+                  <strong>{{ review.by }}</strong>
+                  <small>{{ review.at }}</small>
+                  @if (review.comment) {
+                    <p>{{ review.comment }}</p>
+                  }
+                </div>
+              </article>
             } @else {
-              @for (observation of justification().observations; track observation.date) {
-                <article class="tutor-observation">
-                  <span class="avatar">{{ observation.author.slice(0, 2).toUpperCase() }}</span>
-                  <div>
-                    <strong>{{ observation.author }}</strong>
-                    <small>{{ observation.role }} - {{ observation.date }}</small>
-                    <p>{{ observation.message }}</p>
-                  </div>
-                </article>
-              }
+              <p class="dropdown-empty">Aun sin revisar.</p>
             }
           </section>
         </aside>
@@ -197,6 +199,7 @@ export class TutorJustificationDetailComponent {
 
   protected downloadPdf(): void {
     const justification = this.justification();
+    const review = justification.review;
 
     downloadPdfReport({
       title: `Justificante ${justification.id}`,
@@ -204,31 +207,18 @@ export class TutorJustificationDetailComponent {
       meta: [
         { label: 'Alumno', value: `${justification.studentName} - ${justification.group}` },
         { label: 'Materia', value: justification.subject },
-        { label: 'Profesor', value: justification.teacher },
+        { label: 'Profesor', value: justification.teacher || 'No disponible' },
         { label: 'Fecha de ausencia', value: justification.absenceDate },
         { label: 'Tipo', value: justification.type },
         { label: 'Fecha de envio', value: justification.sentDate },
         { label: 'Estado', value: justification.status },
         { label: 'Motivo detallado', value: justification.detail },
+        { label: 'Revisado por', value: review?.by ?? 'Aun sin revisar' },
+        ...(review ? [{ label: 'Comentario de revision', value: review.comment || 'Sin comentario' }] : []),
       ],
-      tables: [
-        {
-          title: 'Observaciones',
-          columns: ['Fecha', 'Autor', 'Rol', 'Mensaje'],
-          rows: justification.observations.map((observation) => [
-            observation.date,
-            observation.author,
-            observation.role,
-            observation.message,
-          ]),
-        },
-      ],
+      tables: [],
       fileName: `justificante-${justification.id}.pdf`,
     });
-  }
-
-  protected downloadAttachment(fileName: string): void {
-    this.toastService.info('Descarga iniciada', `Preparando ${fileName}.`);
   }
 
   protected inputValue(event: Event): string {

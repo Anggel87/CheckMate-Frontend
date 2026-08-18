@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, forkJoin, map, of, switchMap } from 'rxjs';
+import { environment } from '../../../../environments/environment';
 import {
   UnknownRecord,
   formatApiDate,
@@ -18,6 +19,8 @@ import {
   unwrapData,
 } from '../../../core/api/api-adapter';
 import { CheckmateApiService } from '../../../core/api/checkmate-api.service';
+import { SseEvent, fetchEventStream } from '../../../core/api/sse-client';
+import { SessionService } from '../../../core/authentication/session.service';
 import { StatusBadgeTone } from '../../../shared/components/status-badge/status-badge.component';
 
 export type AttendanceMark = 'present' | 'late' | 'absent' | 'justified';
@@ -136,6 +139,8 @@ export interface TeacherAttendanceHistoryView {
   rawDate: string;
   subject: string;
   time: string;
+  classTimeRange: string;
+  checkInDelayLabel: string;
   status: string;
   statusTone: StatusBadgeTone;
 }
@@ -146,7 +151,13 @@ export interface TeacherJustificationHistoryView {
   type: string;
   typeTone: StatusBadgeTone;
   subject: string;
+  teacherName: string;
+  reason: string;
+  evidenceUrl: string;
   evidenceIcon: string;
+  reviewedByName: string;
+  reviewedAt: string;
+  comment: string;
 }
 
 export interface TeacherJustificationDetailView {
@@ -181,16 +192,6 @@ export interface TeacherStudentTutorView {
   isPrimary: boolean;
 }
 
-export interface TeacherStudentTutorPayload {
-  firstName: string;
-  secondName?: string;
-  firstSurname: string;
-  secondSurname: string;
-  phone: string;
-  relationship: string;
-  isPrimary?: boolean;
-}
-
 export interface TeacherStudentNotificationResult {
   recipientsCount: number;
 }
@@ -210,8 +211,9 @@ export interface TeacherStudentProfileView {
   justifications: string;
 }
 
-export interface TeacherAttendanceContextView {
-  classItem: TeacherClassView | null;
+export interface TeacherSessionStateView {
+  sessionId: string;
+  sessionOpen: boolean;
   students: TeacherAttendanceStudentView[];
 }
 
@@ -270,6 +272,7 @@ export const EMPTY_TEACHER_INCIDENT_DETAIL: TeacherIncidentDetailView = {
 })
 export class TeacherPortalApiService {
   private readonly api = inject(CheckmateApiService);
+  private readonly sessionService = inject(SessionService);
 
   getProfile(): Observable<TeacherProfileView> {
     return this.api.get<unknown>('/profesor/profile').pipe(
@@ -311,26 +314,82 @@ export class TeacherPortalApiService {
     );
   }
 
-  getAttendanceContext(scheduleId: string | null): Observable<TeacherAttendanceContextView> {
-    if (!scheduleId) {
-      return of({ classItem: null, students: [] });
-    }
+  /**
+   * Grouped by day_of_week (Spanish uppercase, matching the backend's convention), used to find
+   * the nearest upcoming class when nothing is happening today.
+   */
+  getWeekSchedule(): Observable<Record<string, TeacherClassView[]>> {
+    return this.api.get<unknown>('/profesor/schedule').pipe(
+      map((response) => {
+        const record = toRecord(unwrapData(response)) ?? {};
+        const result: Record<string, TeacherClassView[]> = {};
 
-    return this.getTodayClasses().pipe(
-      map((classes) => classes.find((classItem) => classItem.scheduleId === scheduleId || classItem.id === scheduleId) ?? null),
-      switchMap((classItem) => {
-        if (!classItem?.groupId) {
-          return of({ classItem, students: [] });
+        for (const [day, items] of Object.entries(record)) {
+          result[day] = Array.isArray(items) ? items.map((item) => this.toClass(item)) : [];
         }
 
-        return this.getGroupStudents(classItem.groupId).pipe(
-          map((students) => ({
-            classItem,
-            students: students.map((student) => this.toAttendanceStudent(student)),
-          })),
-        );
+        return result;
       }),
     );
+  }
+
+  getSessionState(scheduleId: string | null): Observable<TeacherSessionStateView> {
+    if (!scheduleId) {
+      return of({ sessionId: '', sessionOpen: false, students: [] });
+    }
+
+    return this.api.get<unknown>(`/profesor/schedule/${scheduleId}/session`).pipe(
+      map((response) => this.toSessionState(unwrapData(response))),
+    );
+  }
+
+  /**
+   * Reads the live session-state SSE stream for a schedule, reconnecting to the same URL
+   * (bumping the cursor) whenever the server-side connection window ends, so a chain of
+   * bounded streams reads as continuous real-time updates from the caller's perspective.
+   */
+  streamSessionState(scheduleId: string): Observable<SseEvent> {
+    return new Observable<SseEvent>((subscriber) => {
+      let cursor = 0;
+      let stopped = false;
+      let inner = { unsubscribe: () => {} };
+
+      const connect = (): void => {
+        if (stopped) {
+          return;
+        }
+
+        const token = this.sessionService.authToken();
+        const url = `${environment.checkmateApiUrl}/profesor/schedule/${scheduleId}/stream?since_attendance_id=${cursor}`;
+        const headers: Record<string, string> = token
+          ? { Authorization: `${this.sessionService.tokenType() ?? 'Bearer'} ${token}` }
+          : {};
+
+        inner = fetchEventStream(url, headers).subscribe({
+          next: (event) => {
+            if (event.event === 'attendance') {
+              const attendanceId = readNumber(toRecord(event.data), 'attendance_id', 0);
+              cursor = Math.max(cursor, attendanceId);
+            }
+
+            subscriber.next(event);
+          },
+          error: () => {
+            if (!stopped) {
+              setTimeout(connect, 3000);
+            }
+          },
+          complete: () => connect(),
+        });
+      };
+
+      connect();
+
+      return () => {
+        stopped = true;
+        inner.unsubscribe();
+      };
+    });
   }
 
   saveAttendance(
@@ -482,23 +541,6 @@ export class TeacherPortalApiService {
     );
   }
 
-  addStudentTutor(
-    studentId: string,
-    payload: TeacherStudentTutorPayload,
-  ): Observable<TeacherStudentProfileView> {
-    return this.api
-      .post<unknown>(`/profesor/students/${studentId}/tutors`, {
-        first_name: payload.firstName,
-        second_name: payload.secondName || undefined,
-        first_surname: payload.firstSurname,
-        second_surname: payload.secondSurname,
-        phone: payload.phone,
-        relationship: payload.relationship,
-        is_primary: payload.isPrimary ?? false,
-      })
-      .pipe(map((response) => this.toStudentProfile(unwrapData(response), studentId)));
-  }
-
   notifyStudentTutors(
     studentId: string,
     title: string,
@@ -628,14 +670,45 @@ export class TeacherPortalApiService {
     };
   }
 
-  private toAttendanceStudent(student: TeacherStudentView): TeacherAttendanceStudentView {
+  private toSessionState(value: unknown): TeacherSessionStateView {
+    const record = toRecord(value);
+    const session = toRecord(record?.['session']);
+    const students = Array.isArray(record?.['students']) ? record?.['students'] : [];
+
     return {
-      id: student.id,
-      name: student.name,
-      enrollment: student.enrollment,
-      avatarUrl: student.avatarUrl ?? '/profile-avatar.svg',
-      status: 'absent',
+      sessionId: readString(session, 'id'),
+      sessionOpen: readString(session, 'status') === 'ABIERTA',
+      students: students.map((item) => this.toSessionStudent(item)),
     };
+  }
+
+  private toSessionStudent(value: unknown): TeacherAttendanceStudentView {
+    const record = toRecord(value);
+    const status = readString(record, 'status');
+
+    return {
+      id: readId(record),
+      name: readFullName(record),
+      enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']) || readId(record),
+      avatarUrl: readFirstString(record, ['photo_url', 'avatar_url']) || '/profile-avatar.svg',
+      status: this.toAttendanceMark(status),
+    };
+  }
+
+  private toAttendanceMark(status: string): AttendanceMark {
+    if (status === 'PRESENTE') {
+      return 'present';
+    }
+
+    if (status === 'RETARDO') {
+      return 'late';
+    }
+
+    if (status === 'JUSTIFICADA') {
+      return 'justified';
+    }
+
+    return 'absent';
   }
 
   private toIncident(value: unknown): TeacherIncidentView {
@@ -834,24 +907,41 @@ export class TeacherPortalApiService {
   private toAttendanceHistory(value: unknown): TeacherAttendanceHistoryView {
     const record = toRecord(value);
     const subject = toRecord(record?.['subject']);
-    const schedule = toRecord(record?.['schedule']);
     const rawStatus = readString(record, 'status');
-    const rawDate = readFirstString(record, ['date', 'registered_at', 'created_at']);
+    const rawDate = readFirstString(record, ['date', 'checked_in_at', 'registered_at']);
+    const startTime = readString(record, 'class_start_time');
+    const endTime = readString(record, 'class_end_time');
+    const delayMinutes = record?.['check_in_delay_minutes'];
 
     return {
       id: readFirstString(record, ['attendance_id', 'id']),
       date: formatApiDate(rawDate),
       rawDate,
       subject: readString(subject, 'name', readString(record, 'subject')),
-      time: formatApiTime(readFirstString(record, ['registered_at', 'created_at'])) || readString(schedule, 'start_time'),
+      time: formatApiTime(readFirstString(record, ['checked_in_at', 'registered_at'])),
+      classTimeRange: startTime && endTime ? `${startTime} - ${endTime}` : startTime,
+      checkInDelayLabel: typeof delayMinutes === 'number' ? this.checkInDelayLabel(delayMinutes) : '',
       status: this.attendanceStatusLabel(rawStatus),
       statusTone: toneFromAttendanceStatus(rawStatus),
     };
   }
 
+  private checkInDelayLabel(delayMinutes: number): string {
+    if (delayMinutes <= 0) {
+      return 'Registro justo al abrir la clase';
+    }
+
+    if (delayMinutes === 1) {
+      return 'Registro 1 min despues de abrir la clase';
+    }
+
+    return `Registro ${delayMinutes} min despues de abrir la clase`;
+  }
+
   private toJustificationHistory(value: unknown): TeacherJustificationHistoryView {
     const record = toRecord(value);
     const subject = toRecord(record?.['subject']);
+    const reviewedBy = toRecord(record?.['reviewed_by']);
     const status = readString(record, 'status');
 
     return {
@@ -860,7 +950,13 @@ export class TeacherPortalApiService {
       type: this.requestStatusLabel(status),
       typeTone: toneFromRequestStatus(status),
       subject: readString(subject, 'name', readString(record, 'subject')),
+      teacherName: readString(record, 'teacher'),
+      reason: readString(record, 'reason'),
+      evidenceUrl: readString(record, 'evidence_url'),
       evidenceIcon: readString(record, 'evidence_url') ? 'fa-regular fa-file-lines' : 'fa-regular fa-file',
+      reviewedByName: readFullName(reviewedBy),
+      reviewedAt: formatApiDate(readString(record, 'reviewed_at')),
+      comment: readString(record, 'comment'),
     };
   }
 

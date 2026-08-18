@@ -128,6 +128,10 @@ export class SidebarComponent {
   protected attendanceRoute(): string {
     const role = this.authService.currentUser()?.role;
 
+    if (role === UserRole.TUTOR_TEACHER) {
+      return `${ROUTE_PATHS.rolePrefix[role]}/schedule`;
+    }
+
     if (role && this.permissionService.hasPermission('attendance.view')) {
       return `${ROUTE_PATHS.rolePrefix[role]}/attendance`;
     }
@@ -162,8 +166,10 @@ export class SidebarComponent {
   }
 
   protected showTeacherAttendanceShortcut(): boolean {
+    const role = this.authService.currentUser()?.role;
+
     return (
-      this.authService.currentUser()?.role === UserRole.TEACHER &&
+      (role === UserRole.TEACHER || role === UserRole.TUTOR_TEACHER) &&
       this.permissionService.hasPermission('attendance.view')
     );
   }

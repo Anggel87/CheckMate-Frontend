@@ -1,5 +1,8 @@
-import { Component, EventEmitter, Output, inject } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Component, DestroyRef, EventEmitter, Output, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Location } from '@angular/common';
+import { ActivatedRoute, NavigationEnd, Router, RouterLink } from '@angular/router';
+import { filter } from 'rxjs';
 import { AuthService } from '../../../core/authentication/auth.service';
 import { PermissionService } from '../../../core/authorization/permission.service';
 import { getNavigationForRole } from '../../../core/config/navigation.config';
@@ -24,6 +27,11 @@ import { ProfileMenuComponent } from '../profile-menu/profile-menu.component';
         >
           <i class="fa-solid fa-bars" aria-hidden="true"></i>
         </button>
+        @if (canGoBack()) {
+          <button type="button" class="icon-button" aria-label="Volver atrás" title="Volver atrás" (click)="goBack()">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+          </button>
+        }
         <strong>{{ currentTitle() }}</strong>
       </div>
 
@@ -61,9 +69,39 @@ export class TopbarComponent {
   private readonly router = inject(Router);
   private readonly activatedRoute = inject(ActivatedRoute);
   private readonly authService = inject(AuthService);
+  private readonly location = inject(Location);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly permissionService = inject(PermissionService);
 
   @Output() readonly menuToggle = new EventEmitter<void>();
+
+  /**
+   * Counts in-app navigations (not just the initial page load) so the back arrow only shows
+   * once there is actually somewhere in this session's history to return to. Without this, a
+   * refresh or a pasted deep link on a nested page would show an arrow that, on click, sends
+   * the user out of the app entirely via browser history instead of one screen back.
+   */
+  private readonly navigationCount = signal(0);
+
+  constructor() {
+    this.router.events
+      .pipe(
+        filter((event) => event instanceof NavigationEnd),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => this.navigationCount.update((count) => count + 1));
+  }
+
+  protected canGoBack(): boolean {
+    const currentUrl = this.router.url.split('?')[0];
+    const depth = currentUrl.split('/').filter(Boolean).length;
+
+    return this.navigationCount() > 1 && depth > 2;
+  }
+
+  protected goBack(): void {
+    this.location.back();
+  }
 
   protected currentTitle(): string {
     const user = this.authService.currentUser();

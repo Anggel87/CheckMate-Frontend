@@ -14,7 +14,6 @@ import {
   TeacherGroupView,
   TeacherJustificationHistoryView,
   TeacherPortalApiService,
-  TeacherStudentTutorPayload,
   TeacherStudentView,
 } from '../../teacher-portal/data-access/teacher-portal-api.service';
 import {
@@ -59,6 +58,8 @@ const EMPTY_TUTOR_RECORD: TutorAttendanceRecord = {
   date: '',
   rawDate: '',
   time: '',
+  classTimeRange: '',
+  checkInDelayLabel: '',
   status: 'Inasistencia',
   statusTone: 'neutral',
   source: 'Sistema',
@@ -80,8 +81,8 @@ const EMPTY_TUTOR_JUSTIFICATION: TutorJustification = {
   detail: 'No se encontro el justificante solicitado.',
   status: 'Pendiente',
   statusTone: 'neutral',
-  attachments: [],
-  observations: [],
+  evidenceUrl: '',
+  review: null,
 };
 
 const EMPTY_TUTOR_CLAIM: TutorClaim = {
@@ -95,10 +96,9 @@ const EMPTY_TUTOR_CLAIM: TutorClaim = {
   reportedAt: '',
   status: 'Pendiente',
   statusTone: 'neutral',
-  priority: '',
   description: 'No se encontro el reclamo solicitado.',
-  evidenceLabel: '',
-  timeline: [],
+  evidenceUrl: '',
+  lastAction: null,
 };
 
 @Injectable({
@@ -231,19 +231,6 @@ export class TutoringDataService {
     );
   }
 
-  createTutor(studentId: string, payload: TeacherStudentTutorPayload): Observable<boolean> {
-    return this.teacherApi.addStudentTutor(studentId, payload).pipe(
-      tap((profile) => {
-        this.studentState.update((students) =>
-          students.map((student) =>
-            student.id === studentId ? { ...student, tutors: profile.tutors.map((item) => this.toLegalGuardian(item)) } : student,
-          ),
-        );
-      }),
-      map(() => true),
-    );
-  }
-
   notifyTutors(studentId: string, title: string, message: string): Observable<number> {
     return this.teacherApi
       .notifyStudentTutors(studentId, title, message)
@@ -343,6 +330,31 @@ export class TutoringDataService {
       });
   }
 
+  /**
+   * The justifications list page reviews requests across every tutored student at once, so
+   * unlike attendance (which is only ever viewed one student at a time) it needs a bulk load.
+   * Justifications are rare compared to attendance records, so one request per student here is
+   * cheap enough to not warrant a dedicated batch endpoint.
+   */
+  loadAllStudentsJustifications(): void {
+    const students = this.students();
+
+    if (!students.length) {
+      return;
+    }
+
+    forkJoin(
+      students.map((student) =>
+        this.teacherApi.getStudentJustifications(student.id).pipe(
+          map((items) => items.map((item) => this.toTutorJustification(item, student))),
+          catchError(() => of([] as TutorJustification[])),
+        ),
+      ),
+    ).subscribe((justificationGroups) => {
+      this.justificationState.set(justificationGroups.flat());
+    });
+  }
+
   loadStudentTutors(studentId: string): void {
     this.teacherApi
       .getStudentProfile(studentId)
@@ -425,6 +437,8 @@ export class TutoringDataService {
       date: record.date,
       rawDate: record.rawDate,
       time: record.time,
+      classTimeRange: record.classTimeRange,
+      checkInDelayLabel: record.checkInDelayLabel,
       status: this.toTutorAttendanceStatus(record.status),
       statusTone: record.statusTone,
       source: 'Sistema',
@@ -445,16 +459,18 @@ export class TutoringDataService {
       group: student.group,
       title: item.subject,
       subject: item.subject,
-      teacher: '',
+      teacher: item.teacherName,
       absenceDate: item.date,
       sentDate: item.date,
       type: item.type,
-      reason: item.type,
-      detail: 'Justificante registrado.',
+      reason: item.reason || 'Sin motivo registrado.',
+      detail: item.reason || 'Sin motivo registrado.',
       status,
       statusTone: this.statusTone(status),
-      attachments: [],
-      observations: [],
+      evidenceUrl: item.evidenceUrl,
+      review: item.reviewedByName
+        ? { by: item.reviewedByName, at: item.reviewedAt, comment: item.comment }
+        : null,
     };
   }
 
@@ -465,7 +481,7 @@ export class TutoringDataService {
     const career = toRecord(record?.['career']);
     const subject = toRecord(record?.['subject']);
     const status = this.toTutorStatus(readString(record, 'status'));
-    const evidenceUrl = readString(record, 'evidence_url');
+    const lastAction = toRecord(record?.['last_action']);
 
     return {
       id: readId(record),
@@ -478,10 +494,15 @@ export class TutoringDataService {
       reportedAt: formatApiDate(readString(record, 'created_at')),
       status,
       statusTone: this.statusTone(status),
-      priority: readString(record, 'status'),
       description: readString(record, 'description'),
-      evidenceLabel: evidenceUrl || 'Sin evidencia adjunta',
-      timeline: [],
+      evidenceUrl: readString(record, 'evidence_url'),
+      lastAction: lastAction
+        ? {
+            by: readString(lastAction, 'by'),
+            at: formatApiDate(readString(lastAction, 'at')),
+            comment: readString(lastAction, 'comment'),
+          }
+        : null,
     };
   }
 

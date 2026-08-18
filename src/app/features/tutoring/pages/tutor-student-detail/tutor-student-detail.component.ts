@@ -12,8 +12,7 @@ import { controlErrorMessage, markFormGroupTouched } from '../../../../shared/ut
 import { TutoringDataService } from '../../data-access/tutoring-data.service';
 import { TutorAttendanceRecord, TutorAttendanceStatus } from '../../models/tutoring.model';
 
-type CalendarMark = { subject: string; status: TutorAttendanceStatus; className: string };
-type CalendarDay = { number: string; className: string; marks: CalendarMark[] };
+type CalendarDay = { number: string; dayNumber: number; isToday: boolean; dotClassName: string };
 
 @Component({
   selector: 'app-tutor-student-detail',
@@ -83,24 +82,34 @@ type CalendarDay = { number: string; className: string; marks: CalendarMark[] };
                 </button>
               </div>
             </header>
-            <p class="teacher-help-note">
-              Cada punto representa una clase del dia. Pasa el cursor sobre un punto para ver la materia.
-            </p>
+            <p class="teacher-help-note">Elige un dia para ver el horario de clases y si el alumno asistio.</p>
+            <div class="tutor-calendar-weekdays" aria-hidden="true">
+              <span>Dom</span>
+              <span>Lun</span>
+              <span>Mar</span>
+              <span>Mie</span>
+              <span>Jue</span>
+              <span>Vie</span>
+              <span>Sab</span>
+            </div>
             <div class="teacher-mini-calendar tutor-hour-calendar" aria-label="Calendario de asistencia">
               @for (day of calendarDays(); track $index) {
-                <div class="tutor-calendar-day" [class.is-empty]="!day.number">
+                <button
+                  type="button"
+                  class="tutor-calendar-day"
+                  [class.is-empty]="!day.number"
+                  [class.is-today]="day.isToday"
+                  [class.is-selected]="day.dayNumber !== 0 && selectedDay() === day.dayNumber"
+                  [disabled]="!day.number"
+                  (click)="selectDay(day)"
+                >
                   @if (day.number) {
                     <span class="tutor-calendar-day__number">{{ day.number }}</span>
-                    <div class="tutor-calendar-day__marks">
-                      @for (mark of day.marks; track mark.subject + $index) {
-                        <span
-                          [class]="'tutor-calendar-mark ' + mark.className"
-                          [attr.title]="mark.subject + ': ' + mark.status"
-                        ></span>
-                      }
-                    </div>
+                    @if (day.dotClassName) {
+                      <span [class]="'tutor-calendar-day__dot ' + day.dotClassName"></span>
+                    }
                   }
-                </div>
+                </button>
               }
             </div>
             <footer>
@@ -109,6 +118,31 @@ type CalendarDay = { number: string; className: string; marks: CalendarMark[] };
               <span><i class="fa-solid fa-circle is-muted"></i> Justificado</span>
               <span><i class="fa-solid fa-circle is-warning"></i> Retardo</span>
             </footer>
+
+            @if (selectedDay(); as day) {
+              <div class="tutor-day-detail">
+                <h3>{{ selectedDayLabel() }}</h3>
+
+                @if (selectedDayRecords().length) {
+                  <ul class="tutor-day-detail__list">
+                    @for (record of selectedDayRecords(); track record.id) {
+                      <li>
+                        <div>
+                          <strong>{{ record.subject }}</strong>
+                          <span>{{ record.classTimeRange }}</span>
+                          @if (record.checkInDelayLabel) {
+                            <small>{{ record.checkInDelayLabel }}</small>
+                          }
+                        </div>
+                        <app-status-badge [label]="record.status" [tone]="record.statusTone" />
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="dropdown-empty">El alumno no tuvo clases registradas ese dia.</p>
+                }
+              </div>
+            }
           </section>
 
           <section class="teacher-card teacher-activity-card">
@@ -122,7 +156,10 @@ type CalendarDay = { number: string; className: string; marks: CalendarMark[] };
                   <i [class]="activityIcon(item.status)" aria-hidden="true"></i>
                   <div>
                     <strong>{{ activityLabel(item.status) }}</strong>
-                    <span>{{ item.subject }} - {{ item.time }}</span>
+                    <span>{{ item.subject }} - {{ item.classTimeRange }}</span>
+                    @if (item.checkInDelayLabel) {
+                      <small>{{ item.checkInDelayLabel }}</small>
+                    }
                   </div>
                   <time>{{ item.date }}</time>
                 </article>
@@ -170,70 +207,11 @@ type CalendarDay = { number: string; className: string; marks: CalendarMark[] };
             }
 
             <div class="tutor-legal-actions">
-              <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="toggleAddTutor()">
-                <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
-                Agregar tutor
-              </button>
               <button type="button" class="btn-checkmate btn-checkmate-primary" (click)="toggleMessage()">
                 <i class="fa-regular fa-paper-plane" aria-hidden="true"></i>
                 Enviar mensaje
               </button>
             </div>
-
-            @if (addingTutor()) {
-              <form class="tutor-inline-form" [formGroup]="tutorForm" (ngSubmit)="submitTutor()">
-                <div class="teacher-form-grid">
-                  <label class="teacher-form-field" for="tutor-first-name">
-                    <span class="checkmate-label">Nombre(s)</span>
-                    <input id="tutor-first-name" class="checkmate-input" type="text" formControlName="firstName" />
-                    <app-form-validation-message [message]="tutorError('firstName', 'Nombre')" />
-                  </label>
-                  <label class="teacher-form-field" for="tutor-phone">
-                    <span class="checkmate-label">Telefono</span>
-                    <input id="tutor-phone" class="checkmate-input" type="text" formControlName="phone" />
-                    <app-form-validation-message [message]="tutorError('phone', 'Telefono')" />
-                  </label>
-                  <label class="teacher-form-field" for="tutor-first-surname">
-                    <span class="checkmate-label">Apellido paterno</span>
-                    <input id="tutor-first-surname" class="checkmate-input" type="text" formControlName="firstSurname" />
-                    <app-form-validation-message [message]="tutorError('firstSurname', 'Apellido paterno')" />
-                  </label>
-                  <label class="teacher-form-field" for="tutor-second-surname">
-                    <span class="checkmate-label">Apellido materno</span>
-                    <input id="tutor-second-surname" class="checkmate-input" type="text" formControlName="secondSurname" />
-                    <app-form-validation-message [message]="tutorError('secondSurname', 'Apellido materno')" />
-                  </label>
-                </div>
-                <label class="teacher-form-field" for="tutor-relationship">
-                  <span class="checkmate-label">Relacion con el alumno</span>
-                  <input
-                    id="tutor-relationship"
-                    class="checkmate-input"
-                    type="text"
-                    placeholder="Ej: Madre, Padre, Tutor legal"
-                    formControlName="relationship"
-                  />
-                  <app-form-validation-message [message]="tutorError('relationship', 'Relacion')" />
-                </label>
-                <label class="checkmate-checkbox">
-                  <input type="checkbox" formControlName="isPrimary" />
-                  <span>Marcar como tutor principal</span>
-                </label>
-                <footer class="student-form-actions">
-                  <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="toggleAddTutor()">
-                    Cancelar
-                  </button>
-                  <button type="submit" class="btn-checkmate btn-checkmate-primary" [disabled]="savingTutor()">
-                    @if (savingTutor()) {
-                      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                      Guardando...
-                    } @else {
-                      Guardar tutor
-                    }
-                  </button>
-                </footer>
-              </form>
-            }
 
             @if (sendingMessage()) {
               <form class="tutor-inline-form" [formGroup]="messageForm" (ngSubmit)="submitMessage()">
@@ -281,9 +259,8 @@ export class TutorStudentDetailComponent {
 
   protected readonly viewYear = signal(new Date().getFullYear());
   protected readonly viewMonth = signal(new Date().getMonth());
+  protected readonly selectedDay = signal<number | null>(new Date().getDate());
 
-  protected readonly addingTutor = signal(false);
-  protected readonly savingTutor = signal(false);
   protected readonly sendingMessage = signal(false);
   protected readonly sendingRequest = signal(false);
 
@@ -300,16 +277,6 @@ export class TutorStudentDetailComponent {
     }
   }
 
-  protected readonly tutorForm = this.formBuilder.nonNullable.group({
-    firstName: ['', [Validators.required, Validators.maxLength(45)]],
-    secondName: [''],
-    firstSurname: ['', [Validators.required, Validators.maxLength(45)]],
-    secondSurname: ['', [Validators.required, Validators.maxLength(45)]],
-    phone: ['', [Validators.required, Validators.pattern(/^\d{10}$/)]],
-    relationship: ['', [Validators.required, Validators.maxLength(50)]],
-    isPrimary: [false],
-  });
-
   protected readonly messageForm = this.formBuilder.nonNullable.group({
     title: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(90)]],
     message: ['', [Validators.required, Validators.maxLength(350)]],
@@ -323,11 +290,11 @@ export class TutorStudentDetailComponent {
     return label.charAt(0).toUpperCase() + label.slice(1);
   });
 
-  protected readonly calendarDays = computed<CalendarDay[]>(() => {
+  private readonly recordsByDay = computed(() => {
     const year = this.viewYear();
     const month = this.viewMonth();
     const records = this.tutoringData.attendanceForStudent(this.student().id);
-    const marksByDay = new Map<number, CalendarMark[]>();
+    const map = new Map<number, TutorAttendanceRecord[]>();
 
     records.forEach((record) => {
       if (!record.rawDate) {
@@ -341,24 +308,62 @@ export class TutorStudentDetailComponent {
       }
 
       const day = parsed.getDate();
-      const marks = marksByDay.get(day) ?? [];
-      marks.push({ subject: record.subject, status: record.status, className: this.markClassName(record.status) });
-      marksByDay.set(day, marks);
+      const dayRecords = map.get(day) ?? [];
+      dayRecords.push(record);
+      map.set(day, dayRecords);
     });
 
+    return map;
+  });
+
+  protected readonly calendarDays = computed<CalendarDay[]>(() => {
+    const year = this.viewYear();
+    const month = this.viewMonth();
+    const recordsByDay = this.recordsByDay();
+    const today = new Date();
     const totalDays = new Date(year, month + 1, 0).getDate();
     const leadingDays = new Date(year, month, 1).getDay();
     const days: CalendarDay[] = [];
 
     for (let index = 0; index < leadingDays; index += 1) {
-      days.push({ number: '', className: 'is-empty', marks: [] });
+      days.push({ number: '', dayNumber: 0, isToday: false, dotClassName: '' });
     }
 
     for (let day = 1; day <= totalDays; day += 1) {
-      days.push({ number: String(day), className: '', marks: marksByDay.get(day) ?? [] });
+      const dayRecords = recordsByDay.get(day) ?? [];
+      days.push({
+        number: String(day),
+        dayNumber: day,
+        isToday: today.getFullYear() === year && today.getMonth() === month && today.getDate() === day,
+        dotClassName: this.worstStatusClassName(dayRecords),
+      });
     }
 
     return days;
+  });
+
+  protected readonly selectedDayLabel = computed(() => {
+    const day = this.selectedDay();
+
+    if (day === null) {
+      return '';
+    }
+
+    const label = new Intl.DateTimeFormat('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }).format(
+      new Date(this.viewYear(), this.viewMonth(), day),
+    );
+
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  });
+
+  protected readonly selectedDayRecords = computed<TutorAttendanceRecord[]>(() => {
+    const day = this.selectedDay();
+
+    if (day === null) {
+      return [];
+    }
+
+    return [...(this.recordsByDay().get(day) ?? [])].sort((a, b) => a.time.localeCompare(b.time));
   });
 
   protected readonly recentActivity = computed<TutorAttendanceRecord[]>(() =>
@@ -374,6 +379,14 @@ export class TutorStudentDetailComponent {
 
   protected goToNextMonth(): void {
     this.shiftMonth(1);
+  }
+
+  protected selectDay(day: CalendarDay): void {
+    if (!day.dayNumber) {
+      return;
+    }
+
+    this.selectedDay.set(day.dayNumber);
   }
 
   protected activityIcon(status: TutorAttendanceStatus): string {
@@ -408,59 +421,13 @@ export class TutorStudentDetailComponent {
     return 'Asistencia confirmada';
   }
 
-  protected toggleAddTutor(): void {
-    this.tutorForm.reset({ firstName: '', secondName: '', firstSurname: '', secondSurname: '', phone: '', relationship: '', isPrimary: false });
-    this.sendingMessage.set(false);
-    this.addingTutor.update((value) => !value);
-  }
-
   protected toggleMessage(): void {
     this.messageForm.reset({ title: '', message: '' });
-    this.addingTutor.set(false);
     this.sendingMessage.update((value) => !value);
-  }
-
-  protected tutorError(control: keyof typeof this.tutorForm.controls, label: string): string {
-    return controlErrorMessage(this.tutorForm.controls[control], label);
   }
 
   protected messageError(control: keyof typeof this.messageForm.controls, label: string): string {
     return controlErrorMessage(this.messageForm.controls[control], label);
-  }
-
-  protected submitTutor(): void {
-    markFormGroupTouched(this.tutorForm);
-
-    if (this.tutorForm.invalid) {
-      return;
-    }
-
-    const value = this.tutorForm.getRawValue();
-
-    this.savingTutor.set(true);
-    this.tutoringData
-      .createTutor(this.student().id, {
-        firstName: value.firstName,
-        secondName: value.secondName,
-        firstSurname: value.firstSurname,
-        secondSurname: value.secondSurname,
-        phone: value.phone,
-        relationship: value.relationship,
-        isPrimary: value.isPrimary,
-      })
-      .pipe(
-        finalize(() => this.savingTutor.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: () => {
-          this.toastService.success('Tutor agregado', 'El tutor legal se registro correctamente.');
-          this.addingTutor.set(false);
-        },
-        error: (error: HttpErrorResponse) => {
-          this.toastService.error('No se pudo agregar', apiErrorMessage(error, 'Revisa los datos e intenta de nuevo.'));
-        },
-      });
   }
 
   protected submitMessage(): void {
@@ -494,21 +461,26 @@ export class TutorStudentDetailComponent {
     const date = new Date(this.viewYear(), this.viewMonth() + delta, 1);
     this.viewYear.set(date.getFullYear());
     this.viewMonth.set(date.getMonth());
+    this.selectedDay.set(null);
   }
 
-  private markClassName(status: TutorAttendanceStatus): string {
-    if (status === 'Inasistencia') {
+  private worstStatusClassName(records: readonly TutorAttendanceRecord[]): string {
+    if (records.some((record) => record.status === 'Inasistencia')) {
       return 'is-absent';
     }
 
-    if (status === 'Justificado') {
-      return 'is-muted';
-    }
-
-    if (status === 'Retardo') {
+    if (records.some((record) => record.status === 'Retardo')) {
       return 'is-warning';
     }
 
-    return 'is-present';
+    if (records.some((record) => record.status === 'Justificado')) {
+      return 'is-muted';
+    }
+
+    if (records.length) {
+      return 'is-present';
+    }
+
+    return '';
   }
 }

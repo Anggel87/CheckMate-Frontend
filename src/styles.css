@@ -4871,6 +4871,77 @@ app-root {
   border-radius: 12px;
 }
 
+.teacher-session-waiting {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  background: var(--checkmate-warning-soft);
+  border: 1px solid rgba(255, 149, 0, 0.3);
+}
+
+.teacher-session-waiting > i {
+  font-size: 20px;
+  color: var(--checkmate-warning);
+}
+
+.teacher-session-waiting > div {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+}
+
+.teacher-session-waiting p {
+  margin: 0;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+}
+
+.teacher-session-closed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  color: var(--checkmate-text-secondary);
+  background: var(--checkmate-neutral-soft);
+}
+
+.teacher-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 4px 10px;
+  color: var(--checkmate-success);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--checkmate-success-soft);
+  border-radius: 999px;
+}
+
+.teacher-live-indicator > i {
+  font-size: 8px;
+  animation: teacher-live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes teacher-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.teacher-attendance-card.is-just-checked-in {
+  border-color: var(--checkmate-success);
+  box-shadow: 0 0 0 2px var(--checkmate-success-soft);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
 .teacher-attendance-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -5082,6 +5153,11 @@ app-root {
 
 .teacher-report-grid strong {
   font-size: 17px;
+}
+
+.teacher-report-grid small {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
 }
 
 .teacher-report-grid .is-danger {
@@ -5336,6 +5412,18 @@ app-root {
   margin: 0;
   color: var(--checkmate-text-secondary);
   font-size: 13px;
+}
+
+.teacher-nearest-class p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--checkmate-text-secondary);
+}
+
+.teacher-nearest-class strong {
+  color: var(--checkmate-text-primary);
 }
 
 .teacher-checkbox-list {
@@ -5711,6 +5799,13 @@ app-root {
   color: var(--checkmate-text-secondary);
 }
 
+.teacher-activity-list small {
+  display: block;
+  margin-top: 2px;
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+}
+
 .teacher-side-stack .teacher-student-details-card {
   gap: 22px;
 }
@@ -5736,59 +5831,133 @@ app-root {
   gap: 4px;
 }
 
+.tutor-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding-bottom: 4px;
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .tutor-calendar-day {
   display: grid;
   gap: 6px;
-  min-height: 56px;
+  justify-items: center;
+  min-height: 52px;
   padding: 6px 4px;
+  color: inherit;
   background: transparent;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tutor-calendar-day:not(:disabled):hover {
+  background: var(--checkmate-secondary);
 }
 
 .tutor-calendar-day.is-empty {
   visibility: hidden;
+  cursor: default;
+}
+
+.tutor-calendar-day.is-today .tutor-calendar-day__number {
+  color: #000000;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tutor-calendar-day.is-selected {
+  background: #000000;
+  border-color: #000000;
+}
+
+.tutor-calendar-day.is-selected .tutor-calendar-day__number {
+  color: #ffffff;
+  text-decoration-color: #ffffff;
 }
 
 .tutor-calendar-day__number {
-  justify-self: center;
   font-size: 13px;
   font-weight: 700;
 }
 
-.tutor-calendar-day__marks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  justify-content: center;
-  align-content: flex-start;
-  min-height: 12px;
-}
-
-.tutor-calendar-mark {
+.tutor-calendar-day__dot {
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: #000000;
 }
 
-.tutor-calendar-mark.is-present {
+.tutor-calendar-day.is-selected .tutor-calendar-day__dot {
+  background: #ffffff;
+}
+
+.tutor-calendar-day__dot.is-present {
   background: #0b6b23;
 }
 
-.tutor-calendar-mark.is-absent {
+.tutor-calendar-day__dot.is-absent {
   background: #c70d2c;
 }
 
-.tutor-calendar-mark.is-muted {
+.tutor-calendar-day__dot.is-muted {
   background: var(--checkmate-text-secondary);
 }
 
-.tutor-calendar-mark.is-warning {
+.tutor-calendar-day__dot.is-warning {
   background: #b06b00;
 }
 
 .teacher-attendance-calendar-small footer i.is-warning {
   color: #b06b00;
+}
+
+.tutor-day-detail {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(210, 210, 215, 0.9);
+}
+
+.tutor-day-detail h3 {
+  font-size: 15px;
+}
+
+.tutor-day-detail__list {
+  display: grid;
+  gap: 10px;
+}
+
+.tutor-day-detail__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--checkmate-secondary);
+  border-radius: 8px;
+}
+
+.tutor-day-detail__list li div {
+  display: grid;
+  gap: 2px;
+}
+
+.tutor-day-detail__list li span {
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+}
+
+.tutor-day-detail__list li small {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
 }
 
 .tutor-legal-actions {
@@ -6161,7 +6330,6 @@ body {
 
 .tutor-student-preview-list,
 .tutor-attendance-records,
-.tutor-claim-timeline,
 .tutor-observations-card {
   display: grid;
   gap: 12px;
@@ -6337,6 +6505,42 @@ body {
   align-items: center;
 }
 
+.tutor-student-aside {
+  text-align: center;
+  justify-items: center;
+}
+
+.tutor-student-aside--banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+  text-align: left;
+  justify-items: normal;
+}
+
+.tutor-student-aside--banner h2 {
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 22px;
+}
+
+.tutor-student-aside--banner dl {
+  flex: 0 1 420px;
+  width: auto;
+}
+
+.tutor-filter-group {
+  display: grid;
+  gap: 10px;
+}
+
+.tutor-date-range {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .tutor-student-aside img,
 .tutor-student-aside .avatar {
   width: 78px;
@@ -6344,10 +6548,22 @@ body {
   border-radius: 999px;
 }
 
-.tutor-student-aside dl,
+.tutor-student-aside dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
 .tutor-filter-card {
   display: grid;
   gap: 16px;
+}
+
+.tutor-student-aside dl div {
+  padding: 14px;
+  background: var(--checkmate-background);
+  border-radius: 8px;
 }
 
 .tutor-student-aside dt {
@@ -6357,7 +6573,8 @@ body {
 }
 
 .tutor-student-aside dd {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+  font-size: 18px;
   font-weight: 800;
 }
 
@@ -6415,6 +6632,64 @@ body {
 
 .tutor-form-card {
   max-width: 1040px;
+}
+
+.tutor-student-picker-filters {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .tutor-student-picker-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tutor-combobox-field {
+  position: relative;
+}
+
+.tutor-combobox {
+  position: relative;
+}
+
+.tutor-combobox-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  max-height: 260px;
+  padding: 6px;
+  overflow-y: auto;
+  background: var(--checkmate-surface);
+  border: 1px solid rgba(210, 210, 215, 0.82);
+  border-radius: var(--checkmate-radius-lg);
+  box-shadow: var(--checkmate-shadow-modal);
+  list-style: none;
+}
+
+.tutor-combobox-panel li.dropdown-empty {
+  margin: 6px;
+}
+
+.tutor-combobox-panel button {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--checkmate-radius-md);
+}
+
+.tutor-combobox-panel button:hover,
+.tutor-combobox-panel button:focus-visible {
+  background: var(--checkmate-neutral-soft);
 }
 
 .tutor-segmented-field {
@@ -6501,40 +6776,36 @@ body {
   grid-template-columns: minmax(0, 1fr) 300px;
 }
 
-.tutor-claim-description-card {
-  min-height: 340px;
-}
-
 .tutor-claim-description-card p {
-  padding: 28px;
-  line-height: 1.8;
+  padding: 20px;
+  line-height: 1.7;
+  color: var(--checkmate-text-primary);
   background: #f7f2f2;
   border: 1px solid rgba(210, 210, 215, 0.6);
   border-radius: 8px;
 }
 
-.tutor-claim-evidence,
-.tutor-recurrent-card {
-  min-height: 160px;
-}
-
-.tutor-evidence-preview {
-  display: grid;
-  min-height: 170px;
-  place-items: center;
-  color: var(--checkmate-text-secondary);
-  border: 2px dashed rgba(110, 110, 115, 0.32);
-  border-radius: 8px;
-}
-
-.tutor-evidence-preview i {
-  font-size: 42px;
+.tutor-claim-evidence .btn-checkmate {
+  width: 100%;
+  justify-content: center;
 }
 
 .tutor-claim-meta,
 .tutor-claim-actions,
-.tutor-claim-timeline {
+.tutor-claim-last-action {
   grid-column: 1 / -1;
+}
+
+.tutor-claim-last-action p {
+  margin: 0;
+}
+
+.tutor-claim-last-action p + p {
+  margin-top: 8px;
+}
+
+.tutor-claim-last-action span {
+  color: var(--checkmate-text-secondary);
 }
 
 .tutor-claim-meta article {
@@ -6545,19 +6816,6 @@ body {
   justify-content: space-between;
 }
 
-.tutor-claim-timeline article {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 12px;
-}
-
-.tutor-claim-timeline article > span {
-  width: 10px;
-  height: 10px;
-  margin-top: 6px;
-  background: #c70d2c;
-  border-radius: 999px;
-}
 
 .file-upload-field {
   display: grid;

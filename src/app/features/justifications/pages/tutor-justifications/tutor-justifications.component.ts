@@ -62,10 +62,11 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
               <option value="Aprobado">Aprobados</option>
               <option value="Rechazado">Rechazados</option>
             </select>
-            <select class="checkmate-select tutor-compact-select">
-              <option>Asignatura: Todas</option>
-              <option>Base de datos</option>
-              <option>Matematicas Avanzadas II</option>
+            <select class="checkmate-select tutor-compact-select" (change)="subjectFilter.set(inputValue($event))">
+              <option value="Todas">Asignatura: Todas</option>
+              @for (subject of subjects(); track subject) {
+                <option [value]="subject">{{ subject }}</option>
+              }
             </select>
           </div>
         </header>
@@ -114,9 +115,17 @@ import { TutoringDataService } from '../../../tutoring/data-access/tutoring-data
 export class TutorJustificationsComponent {
   private readonly tutoringData = inject(TutoringDataService);
 
+  constructor() {
+    this.tutoringData.loadAllStudentsJustifications();
+  }
+
   protected readonly justifications = this.tutoringData.justifications;
   protected readonly search = signal('');
   protected readonly statusFilter = signal('Todos');
+  protected readonly subjectFilter = signal('Todas');
+  protected readonly subjects = computed(() =>
+    Array.from(new Set(this.justifications().map((item) => item.subject).filter(Boolean))),
+  );
   protected readonly total = computed(() => this.justifications().length);
   protected readonly approved = computed(
     () => this.justifications().filter((item) => item.status === 'Aprobado').length,
@@ -130,16 +139,18 @@ export class TutorJustificationsComponent {
   protected readonly filteredJustifications = computed(() => {
     const term = this.search().trim().toLowerCase();
     const status = this.statusFilter();
+    const subject = this.subjectFilter();
 
     return this.justifications().filter((item) => {
       const matchesStatus = status === 'Todos' || item.status === status;
+      const matchesSubject = subject === 'Todas' || item.subject === subject;
       const matchesTerm =
         term.length === 0 ||
         item.subject.toLowerCase().includes(term) ||
         item.studentName.toLowerCase().includes(term) ||
         item.reason.toLowerCase().includes(term);
 
-      return matchesStatus && matchesTerm;
+      return matchesStatus && matchesSubject && matchesTerm;
     });
   });
 

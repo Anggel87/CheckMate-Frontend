@@ -61,10 +61,18 @@ export interface TutorAttendanceRecord {
   date: string;
   rawDate: string;
   time: string;
+  classTimeRange: string;
+  checkInDelayLabel: string;
   status: TutorAttendanceStatus;
   statusTone: TutorBadgeTone;
   source: string;
   observation: string;
+}
+
+export interface TutorJustificationReview {
+  by: string;
+  at: string;
+  comment: string;
 }
 
 export interface TutorJustification {
@@ -82,8 +90,14 @@ export interface TutorJustification {
   detail: string;
   status: TutorRequestStatus;
   statusTone: TutorBadgeTone;
-  attachments: TutorAttachment[];
-  observations: TutorObservation[];
+  evidenceUrl: string;
+  review: TutorJustificationReview | null;
+}
+
+export interface TutorClaimLastAction {
+  by: string;
+  at: string;
+  comment: string;
 }
 
 export interface TutorClaim {
@@ -97,30 +111,12 @@ export interface TutorClaim {
   reportedAt: string;
   status: TutorRequestStatus;
   statusTone: TutorBadgeTone;
-  priority: string;
   description: string;
-  evidenceLabel: string;
-  timeline: TutorTimelineItem[];
+  evidenceUrl: string;
+  lastAction: TutorClaimLastAction | null;
 }
 
-export interface TutorAttachment {
-  name: string;
-  size: string;
-  icon: string;
-}
 
-export interface TutorObservation {
-  author: string;
-  role: string;
-  date: string;
-  message: string;
-}
-
-export interface TutorTimelineItem {
-  title: string;
-  description: string;
-  date: string;
-}
 
 export interface TutorJustificationFormValue {
   studentId: string;

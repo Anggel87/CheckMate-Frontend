@@ -14,6 +14,12 @@ export const TUTOR_TEACHER_MENU: NavigationItem[] = [
     permission: 'students.view',
   },
   {
+    label: 'Tus materias',
+    icon: 'fa-solid fa-book-open',
+    route: '/tutor/schedule',
+    permission: 'schedule.view',
+  },
+  {
     label: 'Reclamos',
     icon: 'fa-solid fa-triangle-exclamation',
     route: '/tutor/claims',

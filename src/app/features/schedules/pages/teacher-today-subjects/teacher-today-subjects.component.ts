@@ -1,12 +1,22 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import {
   TeacherClassView,
   TeacherPortalApiService,
 } from '../../../teacher-portal/data-access/teacher-portal-api.service';
+
+const DAY_KEYS = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
+const DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+
+interface NearestClassView {
+  dayLabel: string;
+  start: string;
+  classroom: string;
+  subject: string;
+}
 
 @Component({
   selector: 'app-teacher-today-subjects',
@@ -60,7 +70,7 @@ import {
                 @if (classItem.status === 'active') {
                   <a
                     class="btn-checkmate btn-checkmate-primary"
-                    [routerLink]="['/teacher/attendance/take', classItem.scheduleId]"
+                    [routerLink]="[attendanceTakeRoute(), classItem.scheduleId]"
                   >
                     <span>Entrar a clase</span>
                     <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
@@ -68,7 +78,7 @@ import {
                 } @else if (classItem.status === 'next') {
                   <a
                     class="btn-checkmate btn-checkmate-secondary"
-                    [routerLink]="['/teacher/attendance/take', classItem.scheduleId]"
+                    [routerLink]="[attendanceTakeRoute(), classItem.scheduleId]"
                   >
                     <span>Preparar</span>
                     <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i>
@@ -76,7 +86,7 @@ import {
                 } @else {
                   <a
                     class="icon-button"
-                    [routerLink]="['/teacher/groups', classItem.groupId, 'students']"
+                    [routerLink]="viewGroupRoute(classItem)"
                     [attr.aria-label]="'Ver ' + classItem.subject"
                   >
                     <i class="fa-regular fa-eye" aria-hidden="true"></i>
@@ -86,6 +96,21 @@ import {
             } @empty {
               <article class="teacher-card">
                 <p class="dropdown-empty">No hay clases programadas para hoy.</p>
+              </article>
+            }
+
+            @if (!hasUpcomingToday()) {
+              <article class="teacher-card teacher-nearest-class">
+                @if (nearestClass(); as nearest) {
+                  <p>
+                    <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                    Tu proxima clase es el <strong>{{ nearest.dayLabel }}</strong>, a las
+                    <strong>{{ nearest.start }}</strong> en <strong>{{ nearest.classroom }}</strong>
+                    ({{ nearest.subject }}).
+                  </p>
+                } @else if (classes().length > 0) {
+                  <p class="dropdown-empty">No tienes mas clases programadas esta semana.</p>
+                }
               </article>
             }
           </section>
@@ -114,10 +139,12 @@ import {
 })
 export class TeacherTodaySubjectsComponent {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
   private readonly teacherApi = inject(TeacherPortalApiService);
 
   protected readonly loading = signal(true);
   protected readonly classes = signal<TeacherClassView[]>([]);
+  protected readonly nearestClass = signal<NearestClassView | null>(null);
 
   constructor() {
     this.teacherApi
@@ -128,7 +155,62 @@ export class TeacherTodaySubjectsComponent {
       )
       .subscribe((classes) => {
         this.classes.set(classes);
+
+        const active = classes.find((classItem) => classItem.status === 'active');
+
+        if (active) {
+          void this.router.navigate([this.attendanceTakeRoute(), active.scheduleId]);
+          return;
+        }
+
+        if (!classes.some((classItem) => classItem.status === 'next')) {
+          this.loadNearestClass();
+        }
       });
+  }
+
+  protected hasUpcomingToday(): boolean {
+    return this.classes().some((classItem) => classItem.status === 'active' || classItem.status === 'next');
+  }
+
+  private loadNearestClass(): void {
+    this.teacherApi
+      .getWeekSchedule()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((week) => {
+        const todayIndex = new Date().getDay();
+
+        for (let offset = 1; offset <= 7; offset++) {
+          const dayIndex = (todayIndex + offset) % 7;
+          const dayClasses = week[DAY_KEYS[dayIndex]] ?? [];
+
+          if (!dayClasses.length) {
+            continue;
+          }
+
+          const earliest = [...dayClasses].sort((a, b) => a.start.localeCompare(b.start))[0];
+
+          this.nearestClass.set({
+            dayLabel: DAY_LABELS[dayIndex],
+            start: earliest.start,
+            classroom: earliest.classroom,
+            subject: earliest.subject,
+          });
+          return;
+        }
+
+        this.nearestClass.set(null);
+      });
+  }
+
+  protected attendanceTakeRoute(): string {
+    return this.router.url.startsWith('/tutor') ? '/tutor/attendance/take' : '/teacher/attendance/take';
+  }
+
+  protected viewGroupRoute(classItem: TeacherClassView): unknown[] {
+    return this.router.url.startsWith('/tutor')
+      ? ['/tutor/students']
+      : ['/teacher/groups', classItem.groupId, 'students'];
   }
 
   protected nextClass(): TeacherClassView | undefined {
