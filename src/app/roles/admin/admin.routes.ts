@@ -109,6 +109,15 @@ export const ADMIN_ROUTES: Routes = [
           ),
       },
       {
+        path: 'classrooms',
+        canActivate: [permissionGuard],
+        data: { permission: 'classrooms.view' },
+        loadChildren: () =>
+          import('../../features/classrooms/classrooms.routes').then(
+            (routes) => routes.CLASSROOMS_ROUTES,
+          ),
+      },
+      {
         path: 'nfc-devices',
         canActivate: [permissionGuard],
         data: { permission: 'nfc-devices.view' },

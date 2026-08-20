@@ -40,7 +40,11 @@ import {
               </header>
 
               <h2>{{ subject.name }}</h2>
-              <p>{{ subject.teacher }}</p>
+              @if (subject.teacherId) {
+                <a class="student-inline-link" [routerLink]="['/student/teachers', subject.teacherId]">{{ subject.teacher }}</a>
+              } @else {
+                <p>{{ subject.teacher }}</p>
+              }
 
               <dl>
                 <div>

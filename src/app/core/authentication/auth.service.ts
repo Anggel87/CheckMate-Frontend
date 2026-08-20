@@ -38,7 +38,26 @@ export class AuthService {
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
 
   login(returnPathOrUrl = ROUTE_PATHS.portal): void {
-    window.location.assign(buildGovernanceLoginUrl(returnPathOrUrl));
+    let url: string;
+
+    try {
+      url = buildGovernanceLoginUrl(returnPathOrUrl);
+    } catch (error) {
+      console.error('[CheckMate] No se pudo construir la URL de login de gobernanza.', {
+        governanceLoginUrl: environment.governanceLoginUrl,
+        governanceBaseUrl: environment.governanceBaseUrl,
+        error,
+      });
+      this.toastService.error(
+        'No se pudo abrir el portal',
+        'La URL de inicio de sesion no es valida. Revisa la consola para mas detalle.',
+      );
+
+      return;
+    }
+
+    console.info('[CheckMate] Redirigiendo a gobernanza:', url);
+    window.location.assign(url);
   }
 
   completeRedirect(code: string, returnUrl = checkmatePortalUrl()) {
@@ -48,6 +67,12 @@ export class AuthService {
       return_url: returnUrl,
       device_name: 'web-redirect',
     };
+
+    console.info('[CheckMate] Intercambiando codigo de gobernanza:', {
+      url: `${environment.governanceApiUrl}/auth/exchange-code`,
+      client_id: request.client_id,
+      return_url: request.return_url,
+    });
 
     return this.http
       .post<ApiResponse<GovernanceAuthPayload>>(
@@ -62,7 +87,11 @@ export class AuthService {
             ? this.toAuthenticatedUser(payload.token, payload.token_type, payload.user)
             : of<AuthOutcome>({ user: null, message: null });
         }),
-        catchError((error) => of<AuthOutcome>({ user: null, message: apiErrorMessage(error, '') || null })),
+        catchError((error) => {
+          console.error('[CheckMate] Fallo el intercambio de codigo con gobernanza.', error);
+
+          return of<AuthOutcome>({ user: null, message: apiErrorMessage(error, '') || null });
+        }),
       )
       .subscribe((outcome) => this.handleAuthenticatedUser(outcome));
   }

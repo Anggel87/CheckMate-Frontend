@@ -36,13 +36,31 @@ export const STUDENT_ROUTES: Routes = [
       {
         path: 'schedule',
         canActivate: [permissionGuard],
-        data: { permission: 'schedule.view' },
-        loadChildren: () =>
-          import('../../features/schedules/schedules.routes').then(
-            (routes) => routes.SCHEDULES_ROUTES,
+        data: { permission: 'schedule.view', topbarTitle: 'Mi Horario' },
+        loadComponent: () =>
+          import('../../features/schedules/pages/student-schedule/student-schedule.component').then(
+            (component) => component.StudentScheduleComponent,
           ),
       },
       { path: 'schedules', pathMatch: 'full', redirectTo: 'schedule' },
+      {
+        path: 'teachers',
+        canActivate: [permissionGuard],
+        data: { permission: 'teachers.view', topbarTitle: 'Mis Profesores' },
+        loadComponent: () =>
+          import('../../features/teachers/pages/student-teachers/student-teachers.component').then(
+            (component) => component.StudentTeachersComponent,
+          ),
+      },
+      {
+        path: 'teachers/:teacherId',
+        canActivate: [permissionGuard],
+        data: { permission: 'teachers.view', topbarTitle: 'Profesor' },
+        loadComponent: () =>
+          import('../../features/teachers/pages/student-teacher-detail/student-teacher-detail.component').then(
+            (component) => component.StudentTeacherDetailComponent,
+          ),
+      },
       {
         path: 'subjects',
         canActivate: [permissionGuard],
@@ -119,6 +137,14 @@ export const STUDENT_ROUTES: Routes = [
               ),
           },
           {
+            path: ':claimId/edit',
+            data: { topbarTitle: 'Editar Reclamo' },
+            loadComponent: () =>
+              import('../../features/claims/pages/edit-claim/edit-claim.component').then(
+                (component) => component.EditClaimComponent,
+              ),
+          },
+          {
             path: ':claimId',
             data: { topbarTitle: 'Reclamo' },
             loadComponent: () =>
@@ -155,6 +181,14 @@ export const STUDENT_ROUTES: Routes = [
             loadComponent: () =>
               import('../../features/justifications/pages/new-justification/new-justification.component').then(
                 (component) => component.NewJustificationComponent,
+              ),
+          },
+          {
+            path: ':justificationId/edit',
+            data: { topbarTitle: 'Editar Justificante' },
+            loadComponent: () =>
+              import('../../features/justifications/pages/edit-justification/edit-justification.component').then(
+                (component) => component.EditJustificationComponent,
               ),
           },
           {

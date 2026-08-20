@@ -8,18 +8,16 @@ export const STUDENT_MENU: NavigationItem[] = [
     permission: 'dashboard.view',
   },
   {
-    label: 'Informacion',
-    icon: 'fa-regular fa-user',
-    route: '/student/profile',
-    permission: 'profile.view',
-    children: [
-      {
-        label: 'Materias',
-        icon: 'fa-solid fa-book-open',
-        route: '/student/subjects',
-        permission: 'subjects.view',
-      },
-    ],
+    label: 'Horario',
+    icon: 'fa-solid fa-calendar-days',
+    route: '/student/schedule',
+    permission: 'schedule.view',
+  },
+  {
+    label: 'Profesores',
+    icon: 'fa-solid fa-chalkboard-user',
+    route: '/student/teachers',
+    permission: 'teachers.view',
   },
   {
     label: 'Reclamos',
@@ -38,5 +36,19 @@ export const STUDENT_MENU: NavigationItem[] = [
     icon: 'fa-regular fa-calendar-check',
     route: '/student/attendance',
     permission: 'attendance.view',
+  },
+  {
+    label: 'Informacion',
+    icon: 'fa-regular fa-user',
+    route: '/student/profile',
+    permission: 'profile.view',
+    children: [
+      {
+        label: 'Materias',
+        icon: 'fa-solid fa-book-open',
+        route: '/student/subjects',
+        permission: 'subjects.view',
+      },
+    ],
   },
 ];

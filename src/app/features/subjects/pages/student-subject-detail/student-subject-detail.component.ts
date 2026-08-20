@@ -14,6 +14,7 @@ const EMPTY_SUBJECT: StudentCourseView = {
   id: '',
   name: 'Materia',
   teacher: '',
+  teacherId: '',
   group: '',
   schedule: '',
   location: '',
@@ -56,7 +57,13 @@ const EMPTY_SUBJECT: StudentCourseView = {
                 </span>
                 Docente
               </dt>
-              <dd>{{ subject().teacher || 'Sin docente registrado' }}</dd>
+              <dd>
+                @if (subject().teacherId) {
+                  <a [routerLink]="['/student/teachers', subject().teacherId]">{{ subject().teacher }}</a>
+                } @else {
+                  Sin docente registrado
+                }
+              </dd>
             </div>
             <div>
               <dt>

@@ -15,7 +15,10 @@ export const errorInterceptor: HttpInterceptorFn = (request, next) => {
       if (error.status === 401 && error.error?.error_code === 'AUTH05') {
         sessionService.clear();
         toastService.error('Sesion expirada', 'Inicia sesion nuevamente.');
-        window.location.assign(buildGovernanceLoginUrl());
+
+        const loginUrl = buildGovernanceLoginUrl();
+        console.info('[CheckMate] Sesion expirada (AUTH05), redirigiendo a gobernanza:', loginUrl);
+        window.location.assign(loginUrl);
       } else if (error.status === 401) {
         toastService.error('Sesion expirada', 'Inicia sesion nuevamente.');
       } else if (error.status === 403) {

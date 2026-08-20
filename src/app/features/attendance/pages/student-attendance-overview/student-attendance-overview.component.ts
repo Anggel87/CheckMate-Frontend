@@ -7,6 +7,7 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 import { downloadPdfReport } from '../../../../shared/utils/pdf-report.util';
 import {
   StudentAttendanceOverviewView,
+  StudentCalendarDayView,
   StudentMetricView,
   StudentPortalApiService,
   StudentAttendanceRecordView,
@@ -89,10 +90,12 @@ import {
             </header>
 
             <div class="student-calendar-legend" aria-label="Leyenda de estados">
-              <span><i class="student-dot student-dot--present"></i> Presente</span>
-              <span><i class="student-dot student-dot--late"></i> Retardo</span>
-              <span><i class="student-dot student-dot--absent"></i> Falta</span>
-              <span><i class="student-dot student-dot--justified"></i> Justificado</span>
+              <span><i class="student-dot student-dot--absent"></i> Con falta</span>
+              <span><i class="student-dot student-dot--present"></i> Sin falta</span>
+              <span class="student-calendar-legend__hint">
+                <i class="fa-regular fa-hand-pointer" aria-hidden="true"></i>
+                Da clic en un dia para ver el detalle
+              </span>
             </div>
 
             <div
@@ -106,17 +109,20 @@ import {
 
               @for (week of calendarWeeks(); track $index) {
                 @for (day of week; track day.day + '-' + $index) {
-                  <span
+                  <button
+                    type="button"
                     role="gridcell"
+                    [disabled]="day.muted"
                     [class]="
                       'student-calendar-day' +
                       (day.muted ? ' is-muted' : '') +
                       (day.selected ? ' is-selected' : '') +
                       (day.tone ? ' student-calendar-day--' + day.tone : '')
                     "
+                    (click)="openDay(day)"
                   >
                     {{ day.day }}
-                  </span>
+                  </button>
                 }
               }
             </div>
@@ -164,6 +170,82 @@ import {
           </article>
         </section>
       }
+
+      @if (selectedDay(); as day) {
+        <div class="checkmate-dialog-overlay" (click)="closeDay()">
+          <div class="checkmate-dialog student-day-dialog" (click)="$event.stopPropagation()">
+            <button type="button" class="checkmate-dialog__close" aria-label="Cerrar" (click)="closeDay()">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+
+            <header class="student-day-dialog__header">
+              <span
+                class="student-icon-bubble"
+                [class]="'student-icon-bubble student-icon-bubble--' + (day.hasAbsence ? 'absent' : 'present')"
+                aria-hidden="true"
+              >
+                <i class="fa-regular fa-calendar-days" aria-hidden="true"></i>
+              </span>
+              <div>
+                <h2>{{ day.label }}</h2>
+                <p>{{ day.records.length }} clase(s) registrada(s)</p>
+              </div>
+            </header>
+
+            <div class="student-day-dialog__list">
+              @for (record of day.records; track record.id) {
+                <article [class]="'student-day-dialog__item student-day-dialog__item--' + record.statusTone">
+                  <div class="student-day-dialog__item-top">
+                    <span class="student-day-dialog__time">
+                      <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                      {{ record.time || '--:--' }}
+                    </span>
+                    <app-status-badge [label]="record.status" [tone]="record.statusTone" />
+                  </div>
+
+                  <div class="student-day-dialog__item-body">
+                    <strong>{{ record.subject }}</strong>
+                    <p>
+                      @if (record.teacherId) {
+                        <a class="student-inline-link" [routerLink]="['/student/teachers', record.teacherId]">{{
+                          record.teacher
+                        }}</a>
+                      } @else {
+                        {{ record.teacher }}
+                      }
+                    </p>
+                  </div>
+
+                  @if (record.statusTone === 'absent' && record.justifiable) {
+                    <a
+                      class="btn-checkmate btn-checkmate-secondary student-day-dialog__justify"
+                      [routerLink]="['/student/justifications/new']"
+                      [queryParams]="{ subjectId: record.subjectId, attendanceId: record.id }"
+                    >
+                      <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+                      Justificar esta falta
+                    </a>
+                  } @else if (record.statusTone === 'absent' && record.justificationStatusLabel) {
+                    <div class="student-day-dialog__justification-status">
+                      <app-status-badge
+                        [label]="
+                          record.justificationStatusLabel === 'Pendiente'
+                            ? 'En espera de aprobacion'
+                            : 'Justificante ' + record.justificationStatusLabel
+                        "
+                        [tone]="record.justificationStatusTone"
+                        icon="fa-regular fa-hourglass-half"
+                      />
+                    </div>
+                  }
+                </article>
+              } @empty {
+                <p class="dropdown-empty">No hay clases registradas este dia.</p>
+              }
+            </div>
+          </div>
+        </div>
+      }
     </section>
   `,
 })
@@ -190,6 +272,12 @@ export class StudentAttendanceOverviewComponent {
   protected readonly isCurrentMonth = computed(
     () => this.viewYear() === this.today.getFullYear() && this.viewMonth() === this.today.getMonth(),
   );
+
+  protected readonly selectedDay = signal<{
+    label: string;
+    records: StudentAttendanceRecordView[];
+    hasAbsence: boolean;
+  } | null>(null);
 
   constructor() {
     this.studentApi
@@ -222,6 +310,39 @@ export class StudentAttendanceOverviewComponent {
     const date = new Date(this.viewYear(), this.viewMonth() + delta, 1);
     this.viewYear.set(date.getFullYear());
     this.viewMonth.set(date.getMonth());
+  }
+
+  protected openDay(day: StudentCalendarDayView): void {
+    if (day.muted || !day.day) {
+      return;
+    }
+
+    const dayNumber = Number(day.day);
+    const dayRecords = this.records()
+      .filter((record) => {
+        const parsed = new Date(record.rawDate);
+        return (
+          parsed.getFullYear() === this.viewYear() &&
+          parsed.getMonth() === this.viewMonth() &&
+          parsed.getDate() === dayNumber
+        );
+      })
+      .sort((left, right) => new Date(left.registeredAtRaw).getTime() - new Date(right.registeredAtRaw).getTime());
+
+    this.selectedDay.set({
+      label: new Intl.DateTimeFormat('es-MX', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      }).format(new Date(this.viewYear(), this.viewMonth(), dayNumber)),
+      records: dayRecords,
+      hasAbsence: dayRecords.some((record) => record.statusTone === 'absent'),
+    });
+  }
+
+  protected closeDay(): void {
+    this.selectedDay.set(null);
   }
 
   protected downloadReport(): void {

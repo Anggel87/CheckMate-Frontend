@@ -12,6 +12,7 @@ export const ADMIN_MENU: NavigationItem[] = [
   { label: 'Periodos', icon: 'fa-solid fa-calendar-week', route: '/admin/academic-periods', permission: 'academic-periods.view' },
   { label: 'Asistencias', icon: 'fa-solid fa-calendar-check', route: '/admin/attendance', permission: 'attendance.view' },
   { label: 'Reglas de asistencia', icon: 'fa-solid fa-sliders', route: '/admin/attendance-settings', permission: 'attendance-settings.view' },
+  { label: 'Salones', icon: 'fa-solid fa-door-open', route: '/admin/classrooms', permission: 'classrooms.view' },
   { label: 'Dispositivos', icon: 'fa-solid fa-microchip', route: '/admin/nfc-devices', permission: 'nfc-devices.view' },
   { label: 'Tarjetas NFC', icon: 'fa-solid fa-id-card', route: '/admin/nfc-cards', permission: 'nfc-cards.view' },
   { label: 'Reclamos', icon: 'fa-solid fa-message', route: '/admin/claims', permission: 'claims.view' },

@@ -8,6 +8,7 @@ import { apiErrorMessage } from '../../../shared/utils/api-error.util';
 import {
   AttendanceSettingFormPayload,
   CareerFormPayload,
+  ClassroomFormPayload,
   DeviceCreatePayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
@@ -172,6 +173,45 @@ export class ManagementDataService {
 
     return this.checkmateApi.getCollection(`${this.adminBase()}/classrooms`, (item, index) =>
       this.toClassroom(item, index),
+    );
+  }
+
+  getClassroom(classroomId: string): Observable<ManagementClassroom> {
+    return this.checkmateApi
+      .get<unknown>(`${this.adminBase()}/classrooms/${classroomId}`)
+      .pipe(map((response) => this.toClassroom(unwrapData(response), 0)));
+  }
+
+  createClassroom(payload: ClassroomFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.post<unknown>(`${this.adminBase()}/classrooms`, payload).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  updateClassroom(classroomId: string, payload: ClassroomFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.put<unknown>(`${this.adminBase()}/classrooms/${classroomId}`, payload).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  deleteClassroom(classroomId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.delete<unknown>(`${this.adminBase()}/classrooms/${classroomId}`, { confirm: true }).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
     );
   }
 

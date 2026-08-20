@@ -35,7 +35,15 @@ import {
             <header>
               <div>
                 <h2>{{ detail().subject || 'Registro de asistencia' }}</h2>
-                <p>{{ detail().teacher }}</p>
+                <p>
+                  @if (detail().teacherId) {
+                    <a class="student-inline-link" [routerLink]="['/student/teachers', detail().teacherId]">{{
+                      detail().teacher
+                    }}</a>
+                  } @else {
+                    {{ detail().teacher }}
+                  }
+                </p>
               </div>
               <app-status-badge [label]="detail().status || 'Sin estado'" [tone]="detail().statusTone" />
             </header>
@@ -79,13 +87,43 @@ import {
               <i class="fa-solid fa-bullhorn" aria-hidden="true"></i>
               Crear Reclamo
             </a>
-            <a
-              class="btn-checkmate btn-checkmate-secondary"
-              routerLink="/student/justifications/select-absence"
-            >
-              <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
-              Subir Justificante
-            </a>
+
+            @if (detail().justificationStatusLabel) {
+              <a
+                class="btn-checkmate btn-checkmate-secondary"
+                [routerLink]="['/student/justifications', detail().justificationId]"
+              >
+                <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+                Ver Justificante Enviado
+              </a>
+            } @else if (detail().justifiable) {
+              <a
+                class="btn-checkmate btn-checkmate-secondary"
+                routerLink="/student/justifications/select-absence"
+              >
+                <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
+                Subir Justificante
+              </a>
+            }
+
+            @if (detail().justificationStatusLabel || detail().claimStatusLabel) {
+              <div class="student-existing-requests">
+                @if (detail().justificationStatusLabel) {
+                  <p>
+                    <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+                    Ya enviaste un justificante para esta falta —
+                    <strong>{{ detail().justificationStatusLabel }}</strong>
+                  </p>
+                }
+                @if (detail().claimStatusLabel) {
+                  <p>
+                    <i class="fa-solid fa-bullhorn" aria-hidden="true"></i>
+                    Tienes un reclamo registrado sobre esta asistencia —
+                    <strong>{{ detail().claimStatusLabel }}</strong>
+                  </p>
+                }
+              </div>
+            }
           </aside>
         </section>
       }

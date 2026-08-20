@@ -22,6 +22,12 @@
   --checkmate-danger-soft: rgba(255, 59, 48, 0.12);
   --checkmate-info-soft: rgba(0, 122, 255, 0.12);
   --checkmate-neutral-soft: rgba(110, 110, 115, 0.12);
+  --checkmate-purple: #af52de;
+  --checkmate-purple-soft: rgba(175, 82, 222, 0.12);
+  --checkmate-teal: #32ade6;
+  --checkmate-teal-soft: rgba(50, 173, 230, 0.12);
+  --checkmate-indigo: #5856d6;
+  --checkmate-indigo-soft: rgba(88, 86, 214, 0.12);
   --checkmate-radius-sm: 8px;
   --checkmate-radius-md: 12px;
   --checkmate-radius-lg: 18px;
@@ -776,10 +782,14 @@ app-root {
 }
 
 .status-badge--present,
-.status-badge--success,
-.status-badge--justified {
+.status-badge--success {
   color: #167232;
   background: var(--checkmate-success-soft);
+}
+
+.status-badge--justified {
+  color: #0059b8;
+  background: var(--checkmate-info-soft);
 }
 
 .status-badge--late,
@@ -3178,6 +3188,17 @@ app-root {
   border-bottom: 1px solid rgba(210, 210, 215, 0.7);
 }
 
+.student-table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.student-table-filters .student-filter-control {
+  min-width: 170px;
+}
+
 .student-current-course h2,
 .student-quick-actions h2,
 .student-contact-card h2,
@@ -3613,6 +3634,27 @@ app-root {
   border-radius: 6px;
 }
 
+.student-attendance-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.student-attendance-flag {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  width: fit-content;
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.student-attendance-flag:hover {
+  color: var(--checkmate-info);
+}
+
 .student-attendance-layout {
   grid-template-columns: minmax(0, 2.1fr) minmax(250px, 0.95fr);
   align-items: start;
@@ -3702,8 +3744,18 @@ app-root {
 .student-calendar-day {
   position: relative;
   display: block;
+  width: 100%;
   min-height: 92px;
   color: var(--checkmate-text-secondary);
+  font: inherit;
+  background: var(--checkmate-surface);
+  cursor: pointer;
+  appearance: none;
+  transition: var(--checkmate-transition);
+}
+
+.student-calendar-day:hover:not(.is-muted) {
+  background: var(--checkmate-secondary);
 }
 
 .student-calendar-day::after {
@@ -3718,9 +3770,7 @@ app-root {
 }
 
 .student-calendar-day--present::after,
-.student-calendar-day--late::after,
-.student-calendar-day--absent::after,
-.student-calendar-day--justified::after {
+.student-calendar-day--absent::after {
   display: block;
 }
 
@@ -3728,20 +3778,14 @@ app-root {
   background: var(--checkmate-success);
 }
 
-.student-calendar-day--late::after {
-  background: var(--checkmate-warning);
-}
-
 .student-calendar-day--absent::after {
   background: var(--checkmate-danger);
 }
 
-.student-calendar-day--justified::after {
-  background: var(--checkmate-info);
-}
-
 .student-calendar-day.is-muted {
   color: rgba(110, 110, 115, 0.58);
+  cursor: default;
+  pointer-events: none;
   background: rgba(210, 210, 215, 0.5);
 }
 
@@ -3750,6 +3794,112 @@ app-root {
   outline: 2px solid #000000;
   outline-offset: -2px;
   background: var(--checkmate-secondary);
+}
+
+.student-calendar-legend__hint {
+  margin-left: auto;
+  color: rgba(110, 110, 115, 0.85);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.student-day-dialog {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.student-day-dialog__header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.student-day-dialog__header h2 {
+  margin: 0;
+  font-size: 19px;
+  text-transform: capitalize;
+}
+
+.student-day-dialog__header p {
+  margin: 2px 0 0;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+}
+
+.student-day-dialog__list {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.student-day-dialog__item {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  text-align: left;
+  background: var(--checkmate-secondary);
+  border-left: 4px solid var(--checkmate-text-secondary);
+  border-radius: var(--checkmate-radius-lg);
+}
+
+.student-day-dialog__item--present {
+  border-left-color: var(--checkmate-success);
+}
+
+.student-day-dialog__item--late {
+  border-left-color: var(--checkmate-warning);
+}
+
+.student-day-dialog__item--absent {
+  border-left-color: var(--checkmate-danger);
+}
+
+.student-day-dialog__item--justified {
+  border-left-color: var(--checkmate-info);
+}
+
+.student-day-dialog__item-top {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.student-day-dialog__time {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.student-day-dialog__item-body strong {
+  display: block;
+  font-size: 15px;
+}
+
+.student-day-dialog__item-body p {
+  margin: 3px 0 0;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+}
+
+.student-day-dialog__justify {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.student-day-dialog__justification-status {
+  display: flex;
+  justify-content: center;
 }
 
 .student-recent-card {
@@ -3974,6 +4124,274 @@ app-root {
   margin: 0;
 }
 
+.student-inline-link {
+  color: #000000;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.28);
+}
+
+.student-inline-link:hover {
+  border-bottom-color: #000000;
+}
+
+.student-subject-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.student-subject-tag {
+  padding: 4px 12px;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+  background: #fbfbfc;
+  border: 1px solid rgba(210, 210, 215, 0.92);
+  border-radius: 999px;
+}
+
+.student-horario-card {
+  padding: 24px;
+}
+
+.student-day-picker {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(210, 210, 215, 0.72);
+}
+
+.student-day-picker button {
+  display: grid;
+  gap: 4px;
+  min-width: 66px;
+  padding: 12px 10px;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  background: var(--checkmate-secondary);
+  border: 2px solid transparent;
+  border-radius: var(--checkmate-radius-md);
+  transition: transform var(--checkmate-transition), background var(--checkmate-transition);
+}
+
+.student-day-picker button small {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--checkmate-info);
+}
+
+.student-day-picker button.is-today {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.student-day-picker button.is-active {
+  color: #ffffff;
+  background: #000000;
+  border-color: #000000;
+  transform: translateY(-2px);
+  box-shadow: var(--checkmate-shadow-md);
+}
+
+.student-day-picker button.is-active small {
+  color: #ffffff;
+}
+
+.student-day-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.student-day-summary h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.student-day-summary span {
+  padding: 5px 14px;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--checkmate-secondary);
+  border-radius: 999px;
+}
+
+.student-class-timeline {
+  display: grid;
+  gap: 16px;
+}
+
+.student-class-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 20px;
+  padding: 20px 22px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid rgba(210, 210, 215, 0.85);
+  border-radius: var(--checkmate-radius-lg);
+  box-shadow: var(--checkmate-shadow-sm);
+  transition: transform var(--checkmate-transition), box-shadow var(--checkmate-transition);
+}
+
+.student-class-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--checkmate-shadow-md);
+}
+
+.student-class-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--accent, var(--checkmate-info));
+}
+
+.student-class-card__time {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.student-class-card__time strong {
+  font-size: 19px;
+  color: #000000;
+}
+
+.student-class-card__time span {
+  font-size: 13px;
+  color: var(--checkmate-text-secondary);
+}
+
+.student-class-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.student-class-card__top {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.student-class-card__icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--accent, var(--checkmate-info));
+  font-size: 18px;
+  background: var(--accent-soft, var(--checkmate-info-soft));
+  border-radius: var(--checkmate-radius-md);
+}
+
+.student-class-card__body h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.student-class-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.student-class-card__chips span,
+.student-class-card__chips a {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 12px;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+  text-decoration: none;
+  background: var(--checkmate-secondary);
+  border-radius: 999px;
+}
+
+.student-class-card__chips a {
+  color: #000000;
+  font-weight: 700;
+}
+
+.student-class-card__chips a:hover {
+  background: var(--checkmate-hover);
+}
+
+.student-class-card--c0 {
+  --accent: var(--checkmate-info);
+  --accent-soft: var(--checkmate-info-soft);
+}
+
+.student-class-card--c1 {
+  --accent: var(--checkmate-success);
+  --accent-soft: var(--checkmate-success-soft);
+}
+
+.student-class-card--c2 {
+  --accent: var(--checkmate-warning);
+  --accent-soft: var(--checkmate-warning-soft);
+}
+
+.student-class-card--c3 {
+  --accent: var(--checkmate-purple);
+  --accent-soft: var(--checkmate-purple-soft);
+}
+
+.student-class-card--c4 {
+  --accent: var(--checkmate-teal);
+  --accent-soft: var(--checkmate-teal-soft);
+}
+
+.student-class-card--c5 {
+  --accent: var(--checkmate-indigo);
+  --accent-soft: var(--checkmate-indigo-soft);
+}
+
+.student-schedule-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 52px 24px;
+  color: var(--checkmate-text-secondary);
+  text-align: center;
+}
+
+.student-schedule-empty i {
+  font-size: 32px;
+  color: var(--checkmate-border);
+}
+
+.student-schedule-empty strong {
+  color: #000000;
+  font-size: 16px;
+}
+
+@media (max-width: 640px) {
+  .student-class-card {
+    grid-template-columns: 1fr;
+  }
+
+  .student-class-card__time {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    justify-content: flex-start;
+    text-align: left;
+  }
+}
+
 .student-card-link {
   justify-content: center;
   width: 100%;
@@ -4116,6 +4534,42 @@ app-root {
   border-radius: 8px;
 }
 
+.student-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.student-teacher-detail-card {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.student-teacher-detail-card header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.student-teacher-detail-card header > div {
+  flex: 1;
+}
+
+.student-teacher-detail-card h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.student-teacher-detail-card header p {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--checkmate-text-secondary);
+}
+
 .student-help-card {
   display: grid;
   gap: 16px;
@@ -4126,6 +4580,28 @@ app-root {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.student-existing-requests {
+  display: grid;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(210, 210, 215, 0.7);
+}
+
+.student-existing-requests p {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  color: var(--checkmate-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.student-existing-requests p i {
+  margin-top: 2px;
+  color: var(--checkmate-info);
 }
 
 .student-absence-card,

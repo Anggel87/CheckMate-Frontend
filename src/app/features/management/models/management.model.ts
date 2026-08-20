@@ -20,6 +20,9 @@ export type ManagementView =
   | 'attendance-settings'
   | 'attendance-setting-create'
   | 'attendance-setting-edit'
+  | 'classrooms'
+  | 'classroom-create'
+  | 'classroom-edit'
   | 'attendance'
   | 'justifications'
   | 'devices'
@@ -228,6 +231,11 @@ export interface ManagementDevice {
 
 export interface ManagementClassroom {
   id: string;
+  name: string;
+  building: string;
+}
+
+export interface ClassroomFormPayload {
   name: string;
   building: string;
 }

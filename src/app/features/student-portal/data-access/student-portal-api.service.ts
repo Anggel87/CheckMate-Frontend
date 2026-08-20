@@ -6,6 +6,7 @@ import {
   formatApiDate,
   formatApiTime,
   initialsFromName,
+  readBoolean,
   readFirstString,
   readFullName,
   readId,
@@ -49,6 +50,7 @@ export interface StudentCourseView {
   id: string;
   name: string;
   teacher: string;
+  teacherId: string;
   group: string;
   schedule: string;
   location: string;
@@ -65,14 +67,23 @@ export interface StudentAttendanceRecordView {
   subjectId: string;
   date: string;
   rawDate: string;
+  registeredAtRaw: string;
   subject: string;
   teacher: string;
+  teacherId: string;
   status: string;
   statusTone: StatusBadgeTone;
   time: string;
+  scheduledTime: string;
   location?: string;
   justified?: boolean;
   justifiable?: boolean;
+  justificationId: string;
+  justificationStatusLabel: string;
+  justificationStatusTone: StatusBadgeTone;
+  claimId: string;
+  claimStatusLabel: string;
+  claimStatusTone: StatusBadgeTone;
 }
 
 export interface StudentJustificationView {
@@ -92,6 +103,7 @@ export interface StudentJustificationDetailView {
   reason: string;
   status: string;
   statusTone: StatusBadgeTone;
+  rawStatus: string;
   evidenceUrl: string;
   reviewedBy: string;
   comment: string;
@@ -100,21 +112,66 @@ export interface StudentJustificationDetailView {
 export interface StudentClaimView {
   id: string;
   date: string;
+  rawDate: string;
   title: string;
   description: string;
   status: string;
   statusTone: StatusBadgeTone;
+  rawStatus: string;
 }
 
 export interface StudentClaimDetailView {
   id: string;
   subject: string;
   teacher: string;
+  teacherId: string;
   date: string;
   description: string;
   status: string;
   statusTone: StatusBadgeTone;
   evidenceUrl: string;
+  rawStatus: string;
+}
+
+export interface StudentClassView {
+  scheduleId: string;
+  start: string;
+  end: string;
+  subject: string;
+  teacher: string;
+  teacherId: string;
+  classroom: string;
+}
+
+export interface StudentTeacherView {
+  id: string;
+  fullName: string;
+  email: string;
+  isTutor: boolean;
+  subjects: string[];
+}
+
+export interface StudentTeacherSubjectView {
+  id: string;
+  name: string;
+}
+
+export interface StudentTeacherScheduleView {
+  scheduleId: string;
+  subject: string;
+  day: string;
+  start: string;
+  end: string;
+  classroom: string;
+}
+
+export interface StudentTeacherDetailView {
+  id: string;
+  fullName: string;
+  email: string;
+  isTutor: boolean;
+  subjects: StudentTeacherSubjectView[];
+  schedules: StudentTeacherScheduleView[];
 }
 
 export interface StudentAbsenceView {
@@ -161,6 +218,7 @@ export interface StudentQuickAction {
 export interface StudentAttendanceDetailView {
   subject: string;
   teacher: string;
+  teacherId: string;
   status: string;
   statusTone: StatusBadgeTone;
   date: string;
@@ -168,6 +226,13 @@ export interface StudentAttendanceDetailView {
   registeredTime: string;
   classroom: string;
   observations: string;
+  justifiable: boolean;
+  justificationId: string;
+  justificationStatusLabel: string;
+  justificationStatusTone: StatusBadgeTone;
+  claimId: string;
+  claimStatusLabel: string;
+  claimStatusTone: StatusBadgeTone;
 }
 
 const STUDENT_QUICK_ACTIONS: readonly StudentQuickAction[] = [
@@ -206,6 +271,7 @@ export const EMPTY_STUDENT_JUSTIFICATION_DETAIL: StudentJustificationDetailView 
   reason: '',
   status: '',
   statusTone: 'neutral',
+  rawStatus: '',
   evidenceUrl: '',
   reviewedBy: '',
   comment: '',
@@ -215,16 +281,28 @@ export const EMPTY_STUDENT_CLAIM_DETAIL: StudentClaimDetailView = {
   id: '',
   subject: '',
   teacher: '',
+  teacherId: '',
   date: '',
   description: '',
   status: '',
   statusTone: 'neutral',
   evidenceUrl: '',
+  rawStatus: '',
+};
+
+export const EMPTY_STUDENT_TEACHER_DETAIL: StudentTeacherDetailView = {
+  id: '',
+  fullName: '',
+  email: '',
+  isTutor: false,
+  subjects: [],
+  schedules: [],
 };
 
 export const EMPTY_STUDENT_ATTENDANCE_DETAIL: StudentAttendanceDetailView = {
   subject: '',
   teacher: '',
+  teacherId: '',
   status: '',
   statusTone: 'neutral',
   date: '',
@@ -232,6 +310,13 @@ export const EMPTY_STUDENT_ATTENDANCE_DETAIL: StudentAttendanceDetailView = {
   registeredTime: '',
   classroom: '',
   observations: 'No se encontro el registro solicitado.',
+  justifiable: false,
+  justificationId: '',
+  justificationStatusLabel: '',
+  justificationStatusTone: 'neutral',
+  claimId: '',
+  claimStatusLabel: '',
+  claimStatusTone: 'neutral',
 };
 
 @Injectable({
@@ -403,6 +488,39 @@ export class StudentPortalApiService {
     return this.api.getCollection('/alumno/claims', (item) => this.toClaim(item));
   }
 
+  getTeachers(): Observable<StudentTeacherView[]> {
+    return this.api.getCollection('/alumno/teachers', (item) => this.toTeacher(item));
+  }
+
+  getTeacherDetail(teacherId: string | null): Observable<StudentTeacherDetailView> {
+    if (!teacherId) {
+      return of(EMPTY_STUDENT_TEACHER_DETAIL);
+    }
+
+    return this.api.get<unknown>(`/alumno/teachers/${teacherId}`).pipe(
+      map((response) => this.toTeacherDetail(unwrapData(response))),
+      catchError(() => of(EMPTY_STUDENT_TEACHER_DETAIL)),
+    );
+  }
+
+  /**
+   * Grouped by day_of_week (Spanish uppercase, matching the backend's convention).
+   */
+  getWeekSchedule(): Observable<Record<string, StudentClassView[]>> {
+    return this.api.get<unknown>('/alumno/schedule').pipe(
+      map((response) => {
+        const record = toRecord(unwrapData(response)) ?? {};
+        const result: Record<string, StudentClassView[]> = {};
+
+        for (const [day, items] of Object.entries(record)) {
+          result[day] = Array.isArray(items) ? items.map((item) => this.toClass(item)) : [];
+        }
+
+        return result;
+      }),
+    );
+  }
+
   getClaimDetail(claimId: string | null): Observable<StudentClaimDetailView> {
     if (!claimId) {
       return of(EMPTY_STUDENT_CLAIM_DETAIL);
@@ -437,6 +555,32 @@ export class StudentPortalApiService {
     return this.api.post<unknown>('/alumno/claims', formData).pipe(map(() => true));
   }
 
+  /**
+   * Solo puede cancelarse mientras el reclamo siga en PENDIENTE (ver rawStatus en
+   * StudentClaimView/StudentClaimDetailView) — el backend rechaza con CLM03 en
+   * cualquier otro estado.
+   */
+  deleteClaim(claimId: string): Observable<boolean> {
+    return this.api.delete<unknown>(`/alumno/claims/${claimId}`, { confirm: true }).pipe(map(() => true));
+  }
+
+  /**
+   * Solo editable mientras el reclamo siga en PENDIENTE (409 CLM03 si no). Se manda
+   * como POST con _method=PUT (ver updateProfile) porque PHP no parsea
+   * multipart/form-data en peticiones PUT reales.
+   */
+  updateClaim(claimId: string, description: string, evidence: File | null): Observable<boolean> {
+    const formData = new FormData();
+    formData.set('_method', 'PUT');
+    formData.set('description', description);
+
+    if (evidence) {
+      formData.set('evidence', evidence);
+    }
+
+    return this.api.post<unknown>(`/alumno/claims/${claimId}`, formData).pipe(map(() => true));
+  }
+
   createJustification(
     subjectId: string,
     attendanceId: string,
@@ -449,6 +593,32 @@ export class StudentPortalApiService {
 
     return this.api
       .post<unknown>(`/alumno/subjects/${subjectId}/attendance/${attendanceId}/justify`, formData)
+      .pipe(map(() => true));
+  }
+
+  /**
+   * Solo editable mientras el justificante siga en PENDIENTE (409 JUST02 si no).
+   * La evidencia es opcional aqui: si no se manda, el backend conserva la actual.
+   */
+  updateJustification(justificationId: string, reason: string, evidence: File | null): Observable<boolean> {
+    const formData = new FormData();
+    formData.set('_method', 'PUT');
+    formData.set('reason', reason);
+
+    if (evidence) {
+      formData.set('evidence', evidence);
+    }
+
+    return this.api.post<unknown>(`/alumno/justifications/${justificationId}`, formData).pipe(map(() => true));
+  }
+
+  /**
+   * Solo puede eliminarse mientras el justificante siga en PENDIENTE (409 JUST02
+   * si no).
+   */
+  deleteJustification(justificationId: string): Observable<boolean> {
+    return this.api
+      .delete<unknown>(`/alumno/justifications/${justificationId}`, { confirm: true })
       .pipe(map(() => true));
   }
 
@@ -493,6 +663,7 @@ export class StudentPortalApiService {
       id: readId(record, fallbackId),
       name: readString(record, 'name'),
       teacher: readFullName(teacher),
+      teacherId: readId(teacher),
       group: this.groupLabel(group),
       schedule: readString(record, 'schedule'),
       location: readFirstString(classroom, ['name', 'label'], readString(record, 'classroom')),
@@ -513,22 +684,46 @@ export class StudentPortalApiService {
     const record = toRecord(value);
     const rawStatus = readString(record, 'status');
     const statusTone = toneFromAttendanceStatus(rawStatus);
-    const rawDate = readFirstString(record, ['date', 'registered_at', 'created_at']);
-    const registeredAt = readFirstString(record, ['registered_at', 'scanned_at', 'created_at']);
+    const rawDate = readFirstString(record, ['date', 'checked_in_at', 'created_at']);
+    const registeredAt = readFirstString(record, ['checked_in_at', 'registered_at', 'created_at']);
+    const scheduleInfo = toRecord(record?.['schedule']);
+    const scheduleStart = readString(scheduleInfo, 'start_time');
+    const scheduleEnd = readString(scheduleInfo, 'end_time');
+    // Hora de esta clase en particular (unica para este registro), a diferencia de
+    // subject?.schedule que junta TODOS los horarios semanales de la materia.
+    const scheduledTime = scheduleStart && scheduleEnd ? `${scheduleStart} - ${scheduleEnd}` : '';
+    const checkInLabel = formatApiTime(registeredAt);
+    // Solo mostramos la hora de registro real cuando el alumno de verdad se presento;
+    // en falta/justificada no hubo checada, asi que mostramos el horario programado.
+    const time =
+      (statusTone === 'present' || statusTone === 'late') && checkInLabel
+        ? checkInLabel
+        : scheduledTime || checkInLabel || subject?.schedule || '';
+    const rawJustificationStatus = readString(record, 'justification_status');
+    const rawClaimStatus = readString(record, 'claim_status');
 
     return {
       id: readFirstString(record, ['attendance_id', 'id']),
       subjectId,
       date: formatApiDate(rawDate),
       rawDate,
+      registeredAtRaw: registeredAt,
       subject: subject?.name ?? '',
       teacher: subject?.teacher ?? '',
+      teacherId: subject?.teacherId ?? '',
       status: this.attendanceStatusLabel(rawStatus),
       statusTone,
-      time: formatApiTime(registeredAt) || subject?.schedule || '',
+      time,
+      scheduledTime: scheduledTime || subject?.schedule || '',
       location: subject?.location,
       justified: statusTone === 'justified',
       justifiable: readBooleanLike(record, 'justifiable'),
+      justificationId: readString(record, 'justification_id'),
+      justificationStatusLabel: rawJustificationStatus ? this.requestStatusLabel(rawJustificationStatus) : '',
+      justificationStatusTone: rawJustificationStatus ? toneFromRequestStatus(rawJustificationStatus) : 'neutral',
+      claimId: readString(record, 'claim_id'),
+      claimStatusLabel: rawClaimStatus ? this.requestStatusLabel(rawClaimStatus) : '',
+      claimStatusTone: rawClaimStatus ? toneFromRequestStatus(rawClaimStatus) : 'neutral',
     };
   }
 
@@ -563,6 +758,7 @@ export class StudentPortalApiService {
       reason: readFirstString(record, ['reason', 'description'], 'Sin motivo registrado.'),
       status: this.requestStatusLabel(status),
       statusTone: toneFromRequestStatus(status),
+      rawStatus: status.toUpperCase(),
       evidenceUrl: readString(record, 'evidence_url'),
       reviewedBy: readFullName(reviewedBy),
       comment: readString(record, 'comment'),
@@ -576,14 +772,78 @@ export class StudentPortalApiService {
     const status = readString(record, 'status');
     const subjectName = readString(subject, 'name', 'Reclamo');
     const teacherName = readFullName(teacher);
+    const rawDate = readFirstString(record, ['created_at', 'date']);
 
     return {
       id: readId(record),
-      date: formatApiDate(readFirstString(record, ['created_at', 'date'])),
+      date: formatApiDate(rawDate),
+      rawDate,
       title: subjectName,
       description: readString(record, 'description', teacherName),
       status: this.requestStatusLabel(status),
       statusTone: toneFromRequestStatus(status),
+      rawStatus: status.toUpperCase(),
+    };
+  }
+
+  private toClass(value: unknown): StudentClassView {
+    const record = toRecord(value);
+    const subject = toRecord(record?.['subject']);
+    const teacher = toRecord(record?.['teacher']);
+    const classroom = toRecord(record?.['classroom']);
+
+    return {
+      scheduleId: readFirstString(record, ['schedule_id', 'id']),
+      start: readString(record, 'start_time'),
+      end: readString(record, 'end_time'),
+      subject: readString(subject, 'name', 'Materia'),
+      teacher: readFullName(teacher),
+      teacherId: readId(teacher),
+      classroom: readString(classroom, 'name'),
+    };
+  }
+
+  private toTeacher(value: unknown): StudentTeacherView {
+    const record = toRecord(value);
+    const subjects = Array.isArray(record?.['subjects']) ? (record?.['subjects'] as unknown[]) : [];
+
+    return {
+      id: readId(record),
+      fullName: readFullName(record, 'Profesor'),
+      email: readString(record, 'email'),
+      isTutor: readBoolean(record, 'is_tutor', false),
+      subjects: subjects.map((item) => readString(toRecord(item), 'name')).filter(Boolean),
+    };
+  }
+
+  private toTeacherDetail(value: unknown): StudentTeacherDetailView {
+    const record = toRecord(value);
+    const subjects = Array.isArray(record?.['subjects']) ? (record?.['subjects'] as unknown[]) : [];
+    const schedules = Array.isArray(record?.['schedules']) ? (record?.['schedules'] as unknown[]) : [];
+
+    return {
+      id: readId(record),
+      fullName: readFullName(record, 'Profesor'),
+      email: readString(record, 'email'),
+      isTutor: readBoolean(record, 'is_tutor', false),
+      subjects: subjects.map((item) => {
+        const subjectRecord = toRecord(item);
+        return { id: readId(subjectRecord), name: readString(subjectRecord, 'name') };
+      }),
+      schedules: schedules.map((item) => {
+        const scheduleRecord = toRecord(item);
+        const subject = toRecord(scheduleRecord?.['subject']);
+        const classroom = toRecord(scheduleRecord?.['classroom']);
+
+        return {
+          scheduleId: readFirstString(scheduleRecord, ['schedule_id', 'id']),
+          subject: readString(subject, 'name'),
+          day: readString(scheduleRecord, 'day_of_week'),
+          start: readString(scheduleRecord, 'start_time'),
+          end: readString(scheduleRecord, 'end_time'),
+          classroom: readString(classroom, 'name'),
+        };
+      }),
     };
   }
 
@@ -597,11 +857,13 @@ export class StudentPortalApiService {
       id: readId(record),
       subject: readString(subject, 'name', 'General'),
       teacher: readFullName(teacher),
+      teacherId: readId(teacher),
       date: formatApiDate(readFirstString(record, ['created_at', 'date'])),
       description: readString(record, 'description'),
       status: this.requestStatusLabel(status),
       statusTone: toneFromRequestStatus(status),
       evidenceUrl: readString(record, 'evidence_url'),
+      rawStatus: status.toUpperCase(),
     };
   }
 
@@ -609,15 +871,24 @@ export class StudentPortalApiService {
     return {
       subject: record.subject,
       teacher: record.teacher,
+      teacherId: record.teacherId,
       status: record.status,
       statusTone: record.statusTone,
       date: record.date,
-      scheduledTime: record.time,
-      registeredTime: record.statusTone === 'absent' ? '--:--' : record.time,
+      scheduledTime: record.scheduledTime || record.time,
+      registeredTime:
+        record.statusTone === 'absent' || record.statusTone === 'justified' ? '--:--' : record.time,
       classroom: record.location ?? '',
       observations: record.justifiable
         ? 'Este registro puede justificarse con evidencia valida.'
         : 'Este registro no puede justificarse.',
+      justifiable: record.justifiable ?? false,
+      justificationId: record.justificationId,
+      justificationStatusLabel: record.justificationStatusLabel,
+      justificationStatusTone: record.justificationStatusTone,
+      claimId: record.claimId,
+      claimStatusLabel: record.claimStatusLabel,
+      claimStatusTone: record.claimStatusTone,
     };
   }
 
@@ -689,16 +960,18 @@ export class StudentPortalApiService {
     const today = new Date();
     const firstDay = new Date(year, month, 1);
     const totalDays = new Date(year, month + 1, 0).getDate();
-    const statusByDay = new Map<number, StudentAttendanceTone>();
+    const daysWithRecords = new Set<number>();
+    const daysWithAbsence = new Set<number>();
 
     records.forEach((record) => {
       const parsed = new Date(record.rawDate);
 
       if (parsed.getFullYear() === year && parsed.getMonth() === month) {
-        const tone = this.calendarTone(record.statusTone);
+        const day = parsed.getDate();
+        daysWithRecords.add(day);
 
-        if (tone) {
-          statusByDay.set(parsed.getDate(), tone);
+        if (record.statusTone === 'absent') {
+          daysWithAbsence.add(day);
         }
       }
     });
@@ -715,7 +988,10 @@ export class StudentPortalApiService {
         day: String(day),
         selected:
           day === today.getDate() && month === today.getMonth() && year === today.getFullYear(),
-        tone: statusByDay.get(day),
+        // El calendario solo distingue rojo (dia con alguna falta sin justificar)
+        // o verde (dia con registros y sin faltas pendientes); el detalle azul de
+        // justificadas se ve al abrir el dia, no en la celda.
+        tone: daysWithRecords.has(day) ? (daysWithAbsence.has(day) ? 'absent' : 'present') : undefined,
       });
     }
 
@@ -818,19 +1094,6 @@ export class StudentPortalApiService {
     }
 
     return status || 'Sin estado';
-  }
-
-  private calendarTone(statusTone: StatusBadgeTone): StudentAttendanceTone | undefined {
-    if (
-      statusTone === 'present' ||
-      statusTone === 'late' ||
-      statusTone === 'absent' ||
-      statusTone === 'justified'
-    ) {
-      return statusTone;
-    }
-
-    return undefined;
   }
 
   private sortByRawDateDescending(left: string, right: string): number {

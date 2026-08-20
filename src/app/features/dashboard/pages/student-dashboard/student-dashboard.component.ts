@@ -65,7 +65,16 @@ import {
 
                 <div class="student-current-course__content">
                   <h3>{{ currentCourse()!.name }}</h3>
-                  <p>{{ currentCourse()!.group }} - {{ currentCourse()!.teacher }}</p>
+                  <p>
+                    {{ currentCourse()!.group }} -
+                    @if (currentCourse()!.teacherId) {
+                      <a class="student-inline-link" [routerLink]="['/student/teachers', currentCourse()!.teacherId]">{{
+                        currentCourse()!.teacher
+                      }}</a>
+                    } @else {
+                      {{ currentCourse()!.teacher }}
+                    }
+                  </p>
                   <small>
                     <i class="fa-regular fa-clock" aria-hidden="true"></i>
                     {{ currentCourse()!.schedule || 'Sin horario activo' }}

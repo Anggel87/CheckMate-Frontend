@@ -16,6 +16,7 @@ import { ManagementDataService } from '../../data-access/management-data.service
 import {
   AttendanceSettingFormPayload,
   CareerFormPayload,
+  ClassroomFormPayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
   IncidentRosterStatus,
@@ -109,6 +110,13 @@ import {
             <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/attendance-settings/new'">
               <i class="fa-solid fa-plus" aria-hidden="true"></i>
               Nueva regla
+            </a>
+          }
+
+          @if (view() === 'classrooms' && isAdmin()) {
+            <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/classrooms/new'">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Nuevo salon
             </a>
           }
         </div>
@@ -916,6 +924,75 @@ import {
                 <p>No se encontro la regla de asistencia solicitada.</p>
                 <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/attendance-settings'">
                   Volver a reglas de asistencia
+                </a>
+              </div>
+            }
+          }
+
+          @case ('classrooms') {
+            <div class="checkmate-card management-table-card">
+              <div class="management-table-wrap">
+                <table class="management-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Edificio</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @if (classroomsLoading()) {
+                      <tr><td colspan="3">Cargando salones...</td></tr>
+                    } @else {
+                      @for (classroom of classrooms(); track classroom.id) {
+                        <tr>
+                          <td><strong>{{ classroom.name }}</strong></td>
+                          <td>{{ classroom.building }}</td>
+                          <td>
+                            <div class="management-actions">
+                              <a
+                                class="btn-checkmate btn-checkmate-secondary"
+                                [routerLink]="baseRoute() + '/classrooms/' + classroom.id + '/edit'"
+                              >
+                                Editar
+                              </a>
+                              <button
+                                type="button"
+                                class="btn-checkmate btn-checkmate-danger"
+                                (click)="deleteClassroom(classroom)"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="3">No hay salones registrados.</td></tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+
+          @case ('classroom-create') {
+            <ng-container [ngTemplateOutlet]="classroomFormTemplate" [ngTemplateOutletContext]="{ editing: false }" />
+          }
+
+          @case ('classroom-edit') {
+            @if (classroomDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando salon...
+              </div>
+            } @else if (classroomDetail()) {
+              <ng-container [ngTemplateOutlet]="classroomFormTemplate" [ngTemplateOutletContext]="{ editing: true }" />
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro el salon solicitado.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/classrooms'">
+                  Volver a salones
                 </a>
               </div>
             }
@@ -1739,6 +1816,27 @@ import {
           </footer>
         </form>
       </ng-template>
+
+      <ng-template #classroomFormTemplate let-editing="editing">
+        <form class="checkmate-card management-form" [formGroup]="classroomForm" (ngSubmit)="submitClassroomForm()">
+          <div class="management-form__grid">
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Nombre</span>
+              <input class="checkmate-input" type="text" formControlName="name" placeholder="Aula 103" />
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Edificio</span>
+              <input class="checkmate-input" type="text" formControlName="building" placeholder="Edificio A" />
+            </label>
+          </div>
+          <footer class="management-form__footer">
+            <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/classrooms'">Cancelar</a>
+            <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+              {{ editing ? 'Guardar cambios' : 'Crear salon' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
     </section>
   `,
 })
@@ -1782,6 +1880,10 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected readonly attendanceSettingDetail = signal<ManagementAttendanceSetting | null>(null);
   protected readonly attendanceSettingDetailLoading = signal(false);
   protected readonly selectedAttendanceSettingId = signal('');
+  protected readonly classroomsLoading = signal(false);
+  protected readonly classroomDetail = signal<ManagementClassroom | null>(null);
+  protected readonly classroomDetailLoading = signal(false);
+  protected readonly selectedClassroomId = signal('');
   protected readonly auditEntity = signal<ManagementAuditLog['entity']>('students');
   protected readonly auditLogsByEntity = signal<Partial<Record<ManagementAuditLog['entity'], ManagementAuditLog[]>>>(
     {},
@@ -1891,6 +1993,11 @@ export class ManagementWorkspaceComponent implements OnInit {
     },
   );
 
+  protected readonly classroomForm = new FormGroup({
+    name: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(45)] }),
+    building: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(45)] }),
+  });
+
   protected readonly editingStudent = signal(false);
   protected readonly addingTutor = signal(false);
   protected readonly editingTutorId = signal<string | null>(null);
@@ -1971,6 +2078,7 @@ export class ManagementWorkspaceComponent implements OnInit {
         this.maybeLoadSchoolYears();
         this.maybeLoadCareers();
         this.maybeLoadAttendanceSettings();
+        this.maybeLoadClassrooms();
       });
 
     this.loadSnapshot();
@@ -2200,6 +2308,111 @@ export class ManagementWorkspaceComponent implements OnInit {
           error: () => this.attendanceSettingDetail.set(null),
         });
     }
+  }
+
+  private maybeLoadClassrooms(): void {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return;
+    }
+
+    if (this.view() === 'classrooms') {
+      this.classroomsLoading.set(true);
+      this.managementData
+        .getClassrooms()
+        .pipe(
+          finalize(() => this.classroomsLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((classrooms) => this.classrooms.set(classrooms));
+      return;
+    }
+
+    if (this.view() === 'classroom-edit') {
+      const id = this.selectedClassroomId();
+
+      if (!id) {
+        return;
+      }
+
+      this.classroomDetailLoading.set(true);
+      this.managementData
+        .getClassroom(id)
+        .pipe(
+          finalize(() => this.classroomDetailLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe({
+          next: (classroom) => {
+            this.classroomDetail.set(classroom);
+            this.classroomForm.patchValue({
+              name: classroom.name,
+              building: classroom.building,
+            });
+          },
+          error: () => this.classroomDetail.set(null),
+        });
+    }
+  }
+
+  protected submitClassroomForm(): void {
+    if (this.classroomForm.invalid || this.submitting()) {
+      this.classroomForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.classroomForm.getRawValue();
+    const payload: ClassroomFormPayload = {
+      name: raw.name,
+      building: raw.building,
+    };
+
+    const editingId = this.view() === 'classroom-edit' ? this.selectedClassroomId() : '';
+    const request$ = editingId
+      ? this.managementData.updateClassroom(editingId, payload)
+      : this.managementData.createClassroom(payload);
+
+    this.submitting.set(true);
+    request$.pipe(finalize(() => this.submitting.set(false))).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success(
+          editingId ? 'Salon actualizado' : 'Salon creado',
+          editingId ? 'Los cambios fueron guardados.' : 'El nuevo salon quedo registrado.',
+        );
+        this.classrooms.set([]);
+        void this.router.navigateByUrl(`${this.baseRoute()}/classrooms`);
+        return;
+      }
+
+      this.toastService.error(
+        editingId ? 'No se pudo guardar' : 'No se pudo crear',
+        result.message ?? 'Verifica que no exista ya un salon con ese nombre en ese edificio.',
+      );
+    });
+  }
+
+  protected async deleteClassroom(classroom: ManagementClassroom): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Eliminar salon',
+      message: `${classroom.name} (${classroom.building}) se eliminara. Esto solo es posible si no tiene dispositivos ni horarios asignados.`,
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-regular fa-trash-can',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.managementData.deleteClassroom(classroom.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Salon eliminado', 'El salon ya no esta disponible.');
+        this.classrooms.update((current) => current.filter((item) => item.id !== classroom.id));
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
   }
 
   protected submitCareerForm(): void {
@@ -2543,6 +2756,9 @@ export class ManagementWorkspaceComponent implements OnInit {
       'attendance-settings': 'Reglas de asistencia',
       'attendance-setting-create': 'Nueva regla de asistencia',
       'attendance-setting-edit': 'Editar regla de asistencia',
+      classrooms: 'Salones',
+      'classroom-create': 'Nuevo salon',
+      'classroom-edit': 'Editar salon',
       attendance: 'Revision de asistencias',
       justifications: 'Justificantes',
       devices: 'Gestion de dispositivos',
@@ -2585,6 +2801,9 @@ export class ManagementWorkspaceComponent implements OnInit {
       'attendance-settings': 'Tolerancias y reglas del pase de lista por horario.',
       'attendance-setting-create': 'Configura las tolerancias de asistencia de un horario.',
       'attendance-setting-edit': 'Actualiza las tolerancias de asistencia de este horario.',
+      classrooms: 'Aulas y laboratorios donde se imparten clases y se instalan los dispositivos NFC.',
+      'classroom-create': 'Registra un nuevo salon con su nombre y edificio.',
+      'classroom-edit': 'Actualiza el nombre o edificio de este salon.',
       attendance: 'Audita registros de asistencia y estados por materia.',
       justifications: 'Seguimiento de justificantes aprobados, pendientes y rechazados.',
       devices: 'Monitorea terminales NFC y estado operativo por aula.',
@@ -3149,6 +3368,7 @@ export class ManagementWorkspaceComponent implements OnInit {
     this.selectedSchoolYearId.set(params.get('schoolYearId') ?? '');
     this.selectedCareerId.set(params.get('careerId') ?? '');
     this.selectedAttendanceSettingId.set(params.get('attendanceSettingId') ?? '');
+    this.selectedClassroomId.set(params.get('classroomId') ?? '');
     this.auditEntity.set(this.readAuditEntity(params.get('entity')));
   }
 
