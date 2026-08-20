@@ -1,15 +1,24 @@
 import { Routes } from '@angular/router';
 
+const loadManagementWorkspace = () =>
+  import('../management/pages/management-workspace/management-workspace.component').then(
+    (component) => component.ManagementWorkspaceComponent,
+  );
+
 export const ATTENDANCE_SETTINGS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
-      ),
-    data: {
-      title: 'Reglas de asistencia',
-      description: 'Configura tolerancias, estados y reglas del pase de lista.',
-    },
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'attendance-settings', topbarTitle: 'Reglas de asistencia' },
+  },
+  {
+    path: 'new',
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'attendance-setting-create', topbarTitle: 'Nueva regla de asistencia' },
+  },
+  {
+    path: ':attendanceSettingId/edit',
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'attendance-setting-edit', topbarTitle: 'Regla de asistencia' },
   },
 ];

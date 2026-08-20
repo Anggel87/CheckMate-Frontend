@@ -2284,6 +2284,10 @@ app-root {
   gap: 32px;
 }
 
+.dashboard-page__columns--single {
+  grid-template-columns: 1fr;
+}
+
 .dashboard-page__columns .checkmate-card {
   min-height: 620px;
   padding: 36px;
@@ -4827,6 +4831,13 @@ app-root {
   align-items: center;
 }
 
+.teacher-attendance-header__incident {
+  flex-shrink: 0;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(255, 149, 0, 0.35);
+}
+
 .teacher-attendance-stats {
   display: flex;
   gap: 16px;
@@ -4942,11 +4953,139 @@ app-root {
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
+.teacher-attendance-empty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 28px 22px;
+  color: var(--checkmate-text-secondary);
+  background: var(--checkmate-background);
+  border: 1px dashed rgba(210, 210, 215, 0.9);
+}
+
+.teacher-attendance-empty > i {
+  font-size: 22px;
+  color: var(--checkmate-text-secondary);
+}
+
+.teacher-attendance-empty > div {
+  display: grid;
+  gap: 2px;
+}
+
+.teacher-attendance-empty strong {
+  color: var(--checkmate-text-primary);
+}
+
+.teacher-attendance-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.checkmate-dialog--pending {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: min(80vh, 640px);
+  text-align: left;
+}
+
+.checkmate-dialog--pending h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.checkmate-dialog--pending > p {
+  margin: 0 0 4px;
+}
+
+.teacher-pending-list {
+  display: grid;
+  gap: 10px;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.teacher-pending-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 160px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--checkmate-background);
+  border-radius: 10px;
+}
+
+.teacher-pending-row img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+.teacher-pending-row > div {
+  display: grid;
+  min-width: 0;
+}
+
+.teacher-pending-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-pending-row span {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+}
+
+.teacher-pending-row .teacher-mark-control {
+  width: auto;
+}
+
+.checkmate-dialog--info img {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+.teacher-student-info-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  text-align: left;
+}
+
+.teacher-student-info-list div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--checkmate-background);
+  border-radius: 8px;
+}
+
+.teacher-student-info-list dt {
+  color: var(--checkmate-text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.teacher-student-info-list dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
 .teacher-attendance-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .teacher-attendance-card {
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 10px;
@@ -4963,9 +5102,27 @@ app-root {
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
 }
 
+.teacher-attendance-card__info {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: var(--checkmate-text-secondary);
+  background: var(--checkmate-background);
+  border-radius: 999px;
+}
+
+.teacher-attendance-card__info:hover {
+  color: var(--checkmate-text-primary);
+  background: var(--checkmate-secondary);
+}
+
 .teacher-attendance-card img {
-  width: 74px;
-  height: 74px;
+  width: 96px;
+  height: 96px;
   object-fit: cover;
   border-radius: 999px;
 }

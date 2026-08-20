@@ -9,6 +9,17 @@ export type ManagementView =
   | 'teacher-attendance'
   | 'subjects'
   | 'schedules'
+  | 'schedule-create'
+  | 'schedule-edit'
+  | 'school-years'
+  | 'school-year-create'
+  | 'school-year-edit'
+  | 'careers'
+  | 'career-create'
+  | 'career-edit'
+  | 'attendance-settings'
+  | 'attendance-setting-create'
+  | 'attendance-setting-edit'
   | 'attendance'
   | 'justifications'
   | 'devices'
@@ -44,6 +55,7 @@ export interface ManagementGroup {
   studentCount: number;
   attendanceRate: number;
   tutor: string;
+  schoolYearId: string;
 }
 
 export interface ManagementAttendanceRecord {
@@ -124,6 +136,81 @@ export interface ManagementSchedule {
   teacher: string;
   group: string;
   classroom: string;
+  schoolYearId: string;
+  groupId: string;
+  subjectId: string;
+  teacherId: string;
+  classroomId: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+}
+
+export interface ScheduleFormPayload {
+  schoolYearId: string;
+  groupId: string;
+  subjectId: string;
+  teacherId: string;
+  classroomId: string;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface ManagementSchoolYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  groupsCount: number;
+}
+
+export interface SchoolYearFormPayload {
+  name: string;
+  startDate: string;
+  endDate: string;
+  status?: string;
+}
+
+export interface ManagementCareer {
+  id: string;
+  name: string;
+  shortName: string;
+  code: string;
+  isActive: boolean;
+  directorId: string;
+  directorName: string;
+  groupsCount: number;
+}
+
+export interface CareerFormPayload {
+  name: string;
+  shortName?: string;
+  code: string;
+  directorId: string;
+}
+
+export interface ManagementCareerDirector {
+  id: string;
+  fullName: string;
+}
+
+export interface ManagementAttendanceSetting {
+  id: string;
+  scheduleId: string;
+  scheduleLabel: string;
+  presentToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  allowManualAttendance: boolean;
+  isActive: boolean;
+}
+
+export interface AttendanceSettingFormPayload {
+  scheduleId: string;
+  presentToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  allowManualAttendance: boolean;
 }
 
 export interface ManagementDevice {
@@ -238,14 +325,6 @@ export interface IncidentCreatePayload {
   severity: string;
   scheduleId: string;
   studentIds: string[];
-  evidence: File | null;
-}
-
-export interface IncidentUpdatePayload {
-  title: string;
-  description: string;
-  type: string;
-  severity: string;
   evidence: File | null;
 }
 

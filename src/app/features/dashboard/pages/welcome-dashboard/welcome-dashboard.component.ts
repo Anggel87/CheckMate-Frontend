@@ -67,39 +67,41 @@ import {
           }
         </section>
 
-        <section class="dashboard-page__columns">
-          <app-card>
-            <div class="panel-heading">
-              <div>
-                <h2>Materias de hoy</h2>
-                <p>{{ todayClasses().length }} sesiones programadas</p>
+        <section class="dashboard-page__columns" [class.dashboard-page__columns--single]="!showTodayClasses()">
+          @if (showTodayClasses()) {
+            <app-card>
+              <div class="panel-heading">
+                <div>
+                  <h2>Materias de hoy</h2>
+                  <p>{{ todayClasses().length }} sesiones programadas</p>
+                </div>
               </div>
-            </div>
 
-            <div class="class-list">
-              @for (classItem of todayClasses(); track classItem.subject + classItem.time) {
-                <article class="class-row" [class.is-active]="classItem.status === 'active'">
-                  <span class="class-row__group">{{ classItem.group }}</span>
-                  <div>
-                    <strong>{{ classItem.subject }}</strong>
-                    <small>
-                      <i class="fa-regular fa-clock" aria-hidden="true"></i>
-                      {{ classItem.time }}
-                    </small>
-                  </div>
-                  <a
-                    class="icon-button"
-                    [routerLink]="classRoute(classItem)"
-                    [attr.aria-label]="'Abrir ' + classItem.subject"
-                  >
-                    <i [class]="classActionIcon(classItem.status)" aria-hidden="true"></i>
-                  </a>
-                </article>
-              } @empty {
-                <p class="dropdown-empty">Sin sesiones de hoy para este rol.</p>
-              }
-            </div>
-          </app-card>
+              <div class="class-list">
+                @for (classItem of todayClasses(); track classItem.subject + classItem.time) {
+                  <article class="class-row" [class.is-active]="classItem.status === 'active'">
+                    <span class="class-row__group">{{ classItem.group }}</span>
+                    <div>
+                      <strong>{{ classItem.subject }}</strong>
+                      <small>
+                        <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                        {{ classItem.time }}
+                      </small>
+                    </div>
+                    <a
+                      class="icon-button"
+                      [routerLink]="classRoute(classItem)"
+                      [attr.aria-label]="'Abrir ' + classItem.subject"
+                    >
+                      <i [class]="classActionIcon(classItem.status)" aria-hidden="true"></i>
+                    </a>
+                  </article>
+                } @empty {
+                  <p class="dropdown-empty">Sin sesiones de hoy para este rol.</p>
+                }
+              </div>
+            </app-card>
+          }
 
           <app-card>
             <div class="panel-heading">
@@ -181,6 +183,11 @@ export class WelcomeDashboardComponent {
 
   protected welcomeDescription(): string {
     return `Hoy es ${this.todayLabel()}. Aqui tienes tu resumen del dia.`;
+  }
+
+  protected showTodayClasses(): boolean {
+    const role = this.authService.currentUser()?.role;
+    return role === UserRole.TEACHER || role === UserRole.TUTOR_TEACHER;
   }
 
   protected attendanceRoute(): string {

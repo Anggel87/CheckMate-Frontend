@@ -1,15 +1,24 @@
 import { Routes } from '@angular/router';
 
+const loadManagementWorkspace = () =>
+  import('../management/pages/management-workspace/management-workspace.component').then(
+    (component) => component.ManagementWorkspaceComponent,
+  );
+
 export const CAREERS_ROUTES: Routes = [
   {
     path: '',
-    loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
-      ),
-    data: {
-      title: 'Carreras',
-      description: 'Estructura para administrar programas académicos.',
-    },
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'careers', topbarTitle: 'Carreras' },
+  },
+  {
+    path: 'new',
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'career-create', topbarTitle: 'Nueva carrera' },
+  },
+  {
+    path: ':careerId/edit',
+    loadComponent: loadManagementWorkspace,
+    data: { managementView: 'career-edit', topbarTitle: 'Carrera' },
   },
 ];

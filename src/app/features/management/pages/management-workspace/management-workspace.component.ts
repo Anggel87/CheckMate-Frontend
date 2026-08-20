@@ -14,10 +14,15 @@ import { DialogService } from '../../../../shared/feedback/services/dialog.servi
 import { ToastService } from '../../../../shared/feedback/services/toast.service';
 import { ManagementDataService } from '../../data-access/management-data.service';
 import {
+  AttendanceSettingFormPayload,
+  CareerFormPayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
   IncidentRosterStatus,
+  ManagementAttendanceSetting,
   ManagementAuditLog,
+  ManagementCareer,
+  ManagementCareerDirector,
   ManagementClaim,
   ManagementClassroom,
   ManagementDevice,
@@ -25,12 +30,15 @@ import {
   ManagementIncident,
   ManagementJustification,
   ManagementSchedule,
+  ManagementSchoolYear,
   ManagementSnapshot,
   ManagementStatus,
   ManagementStudent,
   ManagementTeacher,
   ManagementTutor,
   ManagementView,
+  ScheduleFormPayload,
+  SchoolYearFormPayload,
 } from '../../models/management.model';
 
 @Component({
@@ -73,6 +81,34 @@ import {
             <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/nfc-devices/new'">
               <i class="fa-solid fa-plus" aria-hidden="true"></i>
               Crear dispositivo
+            </a>
+          }
+
+          @if (view() === 'schedules' && isAdmin()) {
+            <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/schedules/new'">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Nuevo horario
+            </a>
+          }
+
+          @if (view() === 'school-years') {
+            <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/academic-periods/new'">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Nuevo periodo
+            </a>
+          }
+
+          @if (view() === 'careers') {
+            <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/careers/new'">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Nueva carrera
+            </a>
+          }
+
+          @if (view() === 'attendance-settings') {
+            <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/attendance-settings/new'">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Nueva regla
             </a>
           }
         </div>
@@ -522,37 +558,367 @@ import {
           }
 
           @case ('schedules') {
-            <div class="checkmate-card management-table-card">
-              <div class="segmented-control">
-                @for (day of scheduleDays(); track day) {
-                  <button type="button" [class.is-active]="day === 'Lunes'">{{ day }}</button>
-                }
+            @if (isAdmin()) {
+              <div class="checkmate-card management-table-card">
+                <div class="management-table-wrap">
+                  <table class="management-table">
+                    <thead>
+                      <tr>
+                        <th>Dia</th>
+                        <th>Hora</th>
+                        <th>Materia</th>
+                        <th>Profesor</th>
+                        <th>Grupo</th>
+                        <th>Aula</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @if (schedulesLoading()) {
+                        <tr><td colspan="7">Cargando horarios...</td></tr>
+                      } @else {
+                        @for (schedule of schedules(); track schedule.id) {
+                          <tr>
+                            <td>{{ schedule.day }}</td>
+                            <td>{{ schedule.time }}</td>
+                            <td><strong>{{ schedule.subject }}</strong></td>
+                            <td>{{ schedule.teacher }}</td>
+                            <td>{{ schedule.group }}</td>
+                            <td>{{ schedule.classroom }}</td>
+                            <td>
+                              <div class="management-actions">
+                                <a
+                                  class="btn-checkmate btn-checkmate-secondary"
+                                  [routerLink]="baseRoute() + '/schedules/' + schedule.id + '/edit'"
+                                >
+                                  Editar
+                                </a>
+                                <button
+                                  type="button"
+                                  class="btn-checkmate btn-checkmate-danger"
+                                  (click)="deactivateSchedule(schedule)"
+                                >
+                                  Dar de baja
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        } @empty {
+                          <tr><td colspan="7">No hay horarios registrados.</td></tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
               </div>
+            } @else {
+              <div class="checkmate-card management-table-card">
+                <div class="segmented-control">
+                  @for (day of scheduleDays(); track day) {
+                    <button
+                      type="button"
+                      [class.is-active]="day.toUpperCase() === selectedScheduleDay()"
+                      (click)="selectedScheduleDay.set(day.toUpperCase())"
+                    >
+                      {{ day }}
+                    </button>
+                  }
+                </div>
+                <div class="management-table-wrap">
+                  <table class="management-table">
+                    <thead>
+                      <tr>
+                        <th>Hora</th>
+                        <th>Materia</th>
+                        <th>Profesor</th>
+                        <th>Grupo</th>
+                        <th>Aula</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (schedule of directorSchedulesForSelectedDay(); track schedule.id) {
+                        <tr>
+                          <td>{{ schedule.time }}</td>
+                          <td><strong>{{ schedule.subject }}</strong></td>
+                          <td>{{ schedule.teacher }}</td>
+                          <td>{{ schedule.group }}</td>
+                          <td>{{ schedule.classroom }}</td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="5">No hay clases este dia.</td></tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            }
+          }
+
+          @case ('schedule-create') {
+            <ng-container [ngTemplateOutlet]="scheduleFormTemplate" [ngTemplateOutletContext]="{ editing: false }" />
+          }
+
+          @case ('schedule-edit') {
+            @if (scheduleDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando horario...
+              </div>
+            } @else if (scheduleDetail()) {
+              <ng-container [ngTemplateOutlet]="scheduleFormTemplate" [ngTemplateOutletContext]="{ editing: true }" />
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro el horario solicitado.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/schedules'">
+                  Volver a horarios
+                </a>
+              </div>
+            }
+          }
+
+          @case ('school-years') {
+            <div class="checkmate-card management-table-card">
               <div class="management-table-wrap">
                 <table class="management-table">
                   <thead>
                     <tr>
-                      <th>Hora</th>
-                      <th>Materia</th>
-                      <th>Profesor</th>
-                      <th>Grupo</th>
-                      <th>Aula</th>
+                      <th>Nombre</th>
+                      <th>Inicio</th>
+                      <th>Fin</th>
+                      <th>Estado</th>
+                      <th>Grupos</th>
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    @for (schedule of snapshot().schedules; track schedule.id) {
-                      <tr>
-                        <td>{{ schedule.time }}</td>
-                        <td><strong>{{ schedule.subject }}</strong></td>
-                        <td>{{ schedule.teacher }}</td>
-                        <td>{{ schedule.group }}</td>
-                        <td>{{ schedule.classroom }}</td>
-                      </tr>
+                    @if (schoolYearsLoading()) {
+                      <tr><td colspan="6">Cargando periodos...</td></tr>
+                    } @else {
+                      @for (year of schoolYears(); track year.id) {
+                        <tr>
+                          <td><strong>{{ year.name }}</strong></td>
+                          <td>{{ year.startDate }}</td>
+                          <td>{{ year.endDate }}</td>
+                          <td>{{ year.status }}</td>
+                          <td>{{ year.groupsCount }}</td>
+                          <td>
+                            <a
+                              class="btn-checkmate btn-checkmate-secondary"
+                              [routerLink]="baseRoute() + '/academic-periods/' + year.id + '/edit'"
+                            >
+                              Editar
+                            </a>
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="6">No hay periodos academicos registrados.</td></tr>
+                      }
                     }
                   </tbody>
                 </table>
               </div>
             </div>
+          }
+
+          @case ('school-year-create') {
+            <ng-container [ngTemplateOutlet]="schoolYearFormTemplate" [ngTemplateOutletContext]="{ editing: false }" />
+          }
+
+          @case ('school-year-edit') {
+            @if (schoolYearDetail()) {
+              <ng-container [ngTemplateOutlet]="schoolYearFormTemplate" [ngTemplateOutletContext]="{ editing: true }" />
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro el periodo academico solicitado.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/academic-periods'">
+                  Volver a periodos academicos
+                </a>
+              </div>
+            }
+          }
+
+          @case ('careers') {
+            <div class="checkmate-card management-table-card">
+              <div class="management-table-wrap">
+                <table class="management-table">
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Codigo</th>
+                      <th>Director</th>
+                      <th>Grupos</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @if (careersLoading()) {
+                      <tr><td colspan="6">Cargando carreras...</td></tr>
+                    } @else {
+                      @for (career of careers(); track career.id) {
+                        <tr>
+                          <td><strong>{{ career.name }}</strong>@if (career.shortName) { <span> ({{ career.shortName }})</span> }</td>
+                          <td>{{ career.code }}</td>
+                          <td>{{ career.directorName }}</td>
+                          <td>{{ career.groupsCount }}</td>
+                          <td>
+                            <span [class]="statusClass(career.isActive ? { label: 'Activa', tone: 'success' } : { label: 'Inactiva', tone: 'neutral' })">
+                              {{ career.isActive ? 'Activa' : 'Inactiva' }}
+                            </span>
+                          </td>
+                          <td>
+                            <div class="management-actions">
+                              <a
+                                class="btn-checkmate btn-checkmate-secondary"
+                                [routerLink]="baseRoute() + '/careers/' + career.id + '/edit'"
+                              >
+                                Editar
+                              </a>
+                              @if (career.isActive) {
+                                <button
+                                  type="button"
+                                  class="btn-checkmate btn-checkmate-danger"
+                                  (click)="deactivateCareer(career)"
+                                >
+                                  Dar de baja
+                                </button>
+                              } @else {
+                                <button
+                                  type="button"
+                                  class="btn-checkmate btn-checkmate-primary"
+                                  (click)="reactivateCareer(career)"
+                                >
+                                  Reactivar
+                                </button>
+                              }
+                            </div>
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="6">No hay carreras registradas.</td></tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+
+          @case ('career-create') {
+            <ng-container [ngTemplateOutlet]="careerFormTemplate" [ngTemplateOutletContext]="{ editing: false }" />
+          }
+
+          @case ('career-edit') {
+            @if (careerDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando carrera...
+              </div>
+            } @else if (careerDetail()) {
+              <ng-container [ngTemplateOutlet]="careerFormTemplate" [ngTemplateOutletContext]="{ editing: true }" />
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro la carrera solicitada.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/careers'">
+                  Volver a carreras
+                </a>
+              </div>
+            }
+          }
+
+          @case ('attendance-settings') {
+            <div class="checkmate-card management-table-card">
+              <div class="management-table-wrap">
+                <table class="management-table">
+                  <thead>
+                    <tr>
+                      <th>Horario</th>
+                      <th>Tolerancia a tiempo</th>
+                      <th>Tolerancia de retardo</th>
+                      <th>Registro manual</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @if (attendanceSettingsLoading()) {
+                      <tr><td colspan="6">Cargando reglas de asistencia...</td></tr>
+                    } @else {
+                      @for (setting of attendanceSettings(); track setting.id) {
+                        <tr>
+                          <td>{{ setting.scheduleLabel }}</td>
+                          <td>{{ setting.presentToleranceMinutes }} min</td>
+                          <td>{{ setting.lateToleranceMinutes }} min</td>
+                          <td>{{ setting.allowManualAttendance ? 'Si' : 'No' }}</td>
+                          <td>
+                            <span [class]="statusClass(setting.isActive ? { label: 'Activa', tone: 'success' } : { label: 'Inactiva', tone: 'neutral' })">
+                              {{ setting.isActive ? 'Activa' : 'Inactiva' }}
+                            </span>
+                          </td>
+                          <td>
+                            <div class="management-actions">
+                              <a
+                                class="btn-checkmate btn-checkmate-secondary"
+                                [routerLink]="baseRoute() + '/attendance-settings/' + setting.id + '/edit'"
+                              >
+                                Editar
+                              </a>
+                              @if (setting.isActive) {
+                                <button
+                                  type="button"
+                                  class="btn-checkmate btn-checkmate-danger"
+                                  (click)="deactivateAttendanceSetting(setting)"
+                                >
+                                  Desactivar
+                                </button>
+                              } @else {
+                                <button
+                                  type="button"
+                                  class="btn-checkmate btn-checkmate-primary"
+                                  (click)="reactivateAttendanceSetting(setting)"
+                                >
+                                  Activar
+                                </button>
+                              }
+                            </div>
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="6">No hay reglas de asistencia registradas.</td></tr>
+                      }
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+
+          @case ('attendance-setting-create') {
+            <ng-container
+              [ngTemplateOutlet]="attendanceSettingFormTemplate"
+              [ngTemplateOutletContext]="{ editing: false }"
+            />
+          }
+
+          @case ('attendance-setting-edit') {
+            @if (attendanceSettingDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando regla de asistencia...
+              </div>
+            } @else if (attendanceSettingDetail()) {
+              <ng-container
+                [ngTemplateOutlet]="attendanceSettingFormTemplate"
+                [ngTemplateOutletContext]="{ editing: true }"
+              />
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro la regla de asistencia solicitada.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/attendance-settings'">
+                  Volver a reglas de asistencia
+                </a>
+              </div>
+            }
           }
 
           @case ('attendance') {
@@ -586,6 +952,7 @@ import {
                   <dl class="management-data-grid">
                     <div><dt>IP local</dt><dd>{{ device.ipAddress }}</dd></div>
                     <div><dt>Salon</dt><dd>{{ device.classroom }}</dd></div>
+                    <div><dt>Edificio</dt><dd>{{ device.building }}</dd></div>
                     <div><dt>Ultima sincronizacion</dt><dd>{{ device.lastSync }}</dd></div>
                   </dl>
                   <div class="management-actions">
@@ -654,7 +1021,7 @@ import {
                   </label>
                   <label class="checkmate-form-field">
                     <span class="checkmate-label">IP</span>
-                    <input class="checkmate-input" type="text" formControlName="ipAddress" />
+                    <input class="checkmate-input" type="text" formControlName="ipAddress" [readonly]="!canEditDevices()" />
                   </label>
                   <label class="checkmate-form-field management-form__full">
                     <span class="checkmate-label">Salon</span>
@@ -1108,13 +1475,19 @@ import {
                 <table class="management-table">
                   <thead><tr><th>Fecha</th><th>Descripcion</th><th>Nivel</th><th>Usuario</th></tr></thead>
                   <tbody>
-                    @for (log of auditLogs(); track log.id) {
-                      <tr>
-                        <td>{{ log.date }}</td>
-                        <td>{{ log.description }}</td>
-                        <td><span [class]="statusClass(log.level)">{{ log.level.label }}</span></td>
-                        <td>{{ log.performedBy }}</td>
-                      </tr>
+                    @if (auditLogsLoading()) {
+                      <tr><td colspan="4">Cargando registros...</td></tr>
+                    } @else {
+                      @for (log of auditLogs(); track log.id) {
+                        <tr>
+                          <td>{{ log.date }}</td>
+                          <td>{{ log.description }}</td>
+                          <td><span [class]="statusClass(log.level)">{{ log.level.label }}</span></td>
+                          <td>{{ log.performedBy }}</td>
+                        </tr>
+                      } @empty {
+                        <tr><td colspan="4">No hay registros de auditoria para {{ auditEntityLabel().toLowerCase() }}.</td></tr>
+                      }
                     }
                   </tbody>
                 </table>
@@ -1174,6 +1547,198 @@ import {
           </div>
         </div>
       </ng-template>
+
+      <ng-template #scheduleFormTemplate let-editing="editing">
+        <form class="checkmate-card management-form" [formGroup]="scheduleForm" (ngSubmit)="submitScheduleForm()">
+          <div class="management-form__grid">
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Ciclo escolar</span>
+              <select class="checkmate-select" formControlName="schoolYearId">
+                <option value="" disabled>Selecciona un ciclo</option>
+                @for (year of schoolYears(); track year.id) {
+                  <option [value]="year.id">{{ year.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Grupo</span>
+              <select class="checkmate-select" formControlName="groupId">
+                <option value="" disabled>Selecciona un grupo</option>
+                @for (group of snapshot().groups; track group.id) {
+                  <option [value]="group.id">{{ group.label }} - {{ group.career }}</option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Materia</span>
+              <select class="checkmate-select" formControlName="subjectId">
+                <option value="" disabled>Selecciona una materia</option>
+                @for (subject of snapshot().subjects; track subject.id) {
+                  <option [value]="subject.id">{{ subject.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Profesor</span>
+              <select class="checkmate-select" formControlName="teacherId">
+                <option value="" disabled>Selecciona un profesor</option>
+                @for (teacher of snapshot().teachers; track teacher.id) {
+                  <option [value]="teacher.id">{{ teacher.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Salon</span>
+              <select class="checkmate-select" formControlName="classroomId">
+                <option value="" disabled>Selecciona un salon</option>
+                @for (classroom of classrooms(); track classroom.id) {
+                  <option [value]="classroom.id">{{ classroom.name }} - {{ classroom.building }}</option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Dia</span>
+              <select class="checkmate-select" formControlName="dayOfWeek">
+                @for (day of dayOfWeekOptions; track day.value) {
+                  <option [value]="day.value">{{ day.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Hora de inicio</span>
+              <input class="checkmate-input" type="time" formControlName="startTime" />
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Hora de fin</span>
+              <input class="checkmate-input" type="time" formControlName="endTime" />
+            </label>
+          </div>
+          <footer class="management-form__footer">
+            <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/schedules'">Cancelar</a>
+            <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+              {{ editing ? 'Guardar cambios' : 'Crear horario' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
+
+      <ng-template #schoolYearFormTemplate let-editing="editing">
+        <form class="checkmate-card management-form" [formGroup]="schoolYearForm" (ngSubmit)="submitSchoolYearForm()">
+          <div class="management-form__grid">
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Nombre (AAAA-AAAA)</span>
+              <input class="checkmate-input" type="text" formControlName="name" placeholder="2026-2027" />
+              @if (schoolYearForm.controls.name.touched && schoolYearForm.controls.name.invalid) {
+                <p class="checkmate-field-error">Usa el formato AAAA-AAAA, ej. 2026-2027.</p>
+              }
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Fecha de inicio</span>
+              <input class="checkmate-input" type="date" formControlName="startDate" />
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Fecha de fin</span>
+              <input class="checkmate-input" type="date" formControlName="endDate" />
+            </label>
+            @if (editing) {
+              <label class="checkmate-form-field">
+                <span class="checkmate-label">Estado</span>
+                <select class="checkmate-select" formControlName="status">
+                  <option value="PROXIMO">Proximo</option>
+                  <option value="ACTIVO">Activo</option>
+                  <option value="FINALIZADO">Finalizado</option>
+                </select>
+              </label>
+            }
+          </div>
+          <footer class="management-form__footer">
+            <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/academic-periods'">Cancelar</a>
+            <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+              {{ editing ? 'Guardar cambios' : 'Crear periodo' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
+
+      <ng-template #careerFormTemplate let-editing="editing">
+        <form class="checkmate-card management-form" [formGroup]="careerForm" (ngSubmit)="submitCareerForm()">
+          <div class="management-form__grid">
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Nombre</span>
+              <input class="checkmate-input" type="text" formControlName="name" placeholder="Ingenieria en Sistemas" />
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Nombre corto (opcional)</span>
+              <input class="checkmate-input" type="text" formControlName="shortName" placeholder="ISC" />
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Codigo</span>
+              <input class="checkmate-input" type="text" formControlName="code" placeholder="ISC-01" />
+              @if (careerForm.controls.code.touched && careerForm.controls.code.invalid) {
+                <p class="checkmate-field-error">Usa mayusculas, numeros y guiones (2-30 caracteres).</p>
+              }
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Director de carrera</span>
+              <select class="checkmate-select" formControlName="directorId">
+                <option value="" disabled>Selecciona un director</option>
+                @for (director of careerDirectors(); track director.id) {
+                  <option [value]="director.id">{{ director.fullName }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <footer class="management-form__footer">
+            <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/careers'">Cancelar</a>
+            <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+              {{ editing ? 'Guardar cambios' : 'Crear carrera' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
+
+      <ng-template #attendanceSettingFormTemplate let-editing="editing">
+        <form
+          class="checkmate-card management-form"
+          [formGroup]="attendanceSettingForm"
+          (ngSubmit)="submitAttendanceSettingForm()"
+        >
+          <div class="management-form__grid">
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Horario</span>
+              <select class="checkmate-select" formControlName="scheduleId">
+                <option value="" disabled>Selecciona un horario</option>
+                @for (schedule of schedules(); track schedule.id) {
+                  <option [value]="schedule.id">
+                    {{ schedule.subject }} - {{ schedule.group }} ({{ schedule.day }} {{ schedule.time }})
+                  </option>
+                }
+              </select>
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Tolerancia a tiempo (minutos)</span>
+              <input class="checkmate-input" type="number" min="0" max="255" formControlName="presentToleranceMinutes" />
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Tolerancia de retardo (minutos)</span>
+              <input class="checkmate-input" type="number" min="0" max="255" formControlName="lateToleranceMinutes" />
+              @if (attendanceSettingForm.controls.lateToleranceMinutes.touched && attendanceSettingForm.errors?.['lateNotGreater']) {
+                <p class="checkmate-field-error">La tolerancia de retardo debe ser mayor a la de asistencia a tiempo.</p>
+              }
+            </label>
+            <label class="checkmate-form-field checkmate-form-field--checkbox">
+              <input class="checkmate-checkbox" type="checkbox" formControlName="allowManualAttendance" />
+              <span class="checkmate-label">Permitir registro manual de asistencia</span>
+            </label>
+          </div>
+          <footer class="management-form__footer">
+            <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/attendance-settings'">Cancelar</a>
+            <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+              {{ editing ? 'Guardar cambios' : 'Crear regla' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
     </section>
   `,
 })
@@ -1196,7 +1761,32 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected readonly selectedIncidentId = signal('');
   protected readonly selectedClaimId = signal('');
   protected readonly selectedDeviceId = signal('');
+  protected readonly schedules = signal<ManagementSchedule[]>([]);
+  protected readonly schedulesLoading = signal(false);
+  protected readonly selectedScheduleDay = signal('LUNES');
+  protected readonly scheduleDetail = signal<ManagementSchedule | null>(null);
+  protected readonly scheduleDetailLoading = signal(false);
+  protected readonly selectedScheduleId = signal('');
+  protected readonly schoolYears = signal<ManagementSchoolYear[]>([]);
+  protected readonly schoolYearsLoading = signal(false);
+  protected readonly schoolYearDetail = signal<ManagementSchoolYear | null>(null);
+  protected readonly selectedSchoolYearId = signal('');
+  protected readonly careers = signal<ManagementCareer[]>([]);
+  protected readonly careersLoading = signal(false);
+  protected readonly careerDetail = signal<ManagementCareer | null>(null);
+  protected readonly careerDetailLoading = signal(false);
+  protected readonly selectedCareerId = signal('');
+  protected readonly careerDirectors = signal<ManagementCareerDirector[]>([]);
+  protected readonly attendanceSettings = signal<ManagementAttendanceSetting[]>([]);
+  protected readonly attendanceSettingsLoading = signal(false);
+  protected readonly attendanceSettingDetail = signal<ManagementAttendanceSetting | null>(null);
+  protected readonly attendanceSettingDetailLoading = signal(false);
+  protected readonly selectedAttendanceSettingId = signal('');
   protected readonly auditEntity = signal<ManagementAuditLog['entity']>('students');
+  protected readonly auditLogsByEntity = signal<Partial<Record<ManagementAuditLog['entity'], ManagementAuditLog[]>>>(
+    {},
+  );
+  protected readonly auditLogsLoading = signal(false);
   protected readonly submitting = signal(false);
 
   protected readonly incidentForm = new FormGroup({
@@ -1237,6 +1827,69 @@ export class ManagementWorkspaceComponent implements OnInit {
     ipAddress: new FormControl('', { nonNullable: true }),
     classroomId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
+
+  protected readonly scheduleForm = new FormGroup({
+    schoolYearId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    groupId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    subjectId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    teacherId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    classroomId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    dayOfWeek: new FormControl('LUNES', { nonNullable: true, validators: [Validators.required] }),
+    startTime: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    endTime: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+  });
+
+  protected readonly dayOfWeekOptions = [
+    { value: 'LUNES', label: 'Lunes' },
+    { value: 'MARTES', label: 'Martes' },
+    { value: 'MIERCOLES', label: 'Miercoles' },
+    { value: 'JUEVES', label: 'Jueves' },
+    { value: 'VIERNES', label: 'Viernes' },
+    { value: 'SABADO', label: 'Sabado' },
+    { value: 'DOMINGO', label: 'Domingo' },
+  ];
+
+  protected readonly schoolYearForm = new FormGroup({
+    name: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(/^\d{4}-\d{4}$/)],
+    }),
+    startDate: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    endDate: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    status: new FormControl('PROXIMO', { nonNullable: true }),
+  });
+
+  protected readonly careerForm = new FormGroup({
+    name: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(3)] }),
+    shortName: new FormControl('', { nonNullable: true }),
+    code: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(/^[A-Z0-9-]{2,30}$/)],
+    }),
+    directorId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+  });
+
+  protected readonly attendanceSettingForm = new FormGroup(
+    {
+      scheduleId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+      presentToleranceMinutes: new FormControl(5, {
+        nonNullable: true,
+        validators: [Validators.required, Validators.min(0), Validators.max(255)],
+      }),
+      lateToleranceMinutes: new FormControl(15, {
+        nonNullable: true,
+        validators: [Validators.required, Validators.min(0), Validators.max(255)],
+      }),
+      allowManualAttendance: new FormControl(true, { nonNullable: true }),
+    },
+    {
+      validators: (group) => {
+        const present = group.get('presentToleranceMinutes')?.value ?? 0;
+        const late = group.get('lateToleranceMinutes')?.value ?? 0;
+        return late > present ? null : { lateNotGreater: true };
+      },
+    },
+  );
 
   protected readonly editingStudent = signal(false);
   protected readonly addingTutor = signal(false);
@@ -1313,10 +1966,503 @@ export class ManagementWorkspaceComponent implements OnInit {
         this.applyParams(params);
         this.patchDeviceForm();
         this.maybeLoadIncidentDetail();
+        this.maybeLoadAuditLogs();
+        this.maybeLoadSchedules();
+        this.maybeLoadSchoolYears();
+        this.maybeLoadCareers();
+        this.maybeLoadAttendanceSettings();
       });
 
     this.loadSnapshot();
     this.loadClassrooms();
+  }
+
+  private maybeLoadAuditLogs(): void {
+    if (this.view() !== 'audit-list') {
+      return;
+    }
+
+    const entity = this.auditEntity();
+
+    if (this.auditLogsByEntity()[entity]) {
+      return;
+    }
+
+    this.auditLogsLoading.set(true);
+    this.managementData
+      .getLogs(entity)
+      .pipe(
+        finalize(() => this.auditLogsLoading.set(false)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: (logs) => this.auditLogsByEntity.update((current) => ({ ...current, [entity]: logs })),
+        error: () => this.auditLogsByEntity.update((current) => ({ ...current, [entity]: [] })),
+      });
+  }
+
+  private maybeLoadSchedules(): void {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return;
+    }
+
+    const needsList =
+      this.view() === 'schedules' ||
+      this.view() === 'attendance-setting-create' ||
+      this.view() === 'attendance-setting-edit';
+
+    if (needsList && (this.view() === 'schedules' || !this.schedules().length)) {
+      this.schedulesLoading.set(true);
+      this.managementData
+        .getSchedules()
+        .pipe(
+          finalize(() => this.schedulesLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((schedules) => this.schedules.set(schedules));
+      return;
+    }
+
+    if (this.view() === 'schedule-edit') {
+      const id = this.selectedScheduleId();
+
+      if (!id) {
+        return;
+      }
+
+      this.scheduleDetailLoading.set(true);
+      this.managementData
+        .getSchedule(id)
+        .pipe(
+          finalize(() => this.scheduleDetailLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe({
+          next: (schedule) => {
+            this.scheduleDetail.set(schedule);
+            this.scheduleForm.patchValue({
+              schoolYearId: schedule.schoolYearId,
+              groupId: schedule.groupId,
+              subjectId: schedule.subjectId,
+              teacherId: schedule.teacherId,
+              classroomId: schedule.classroomId,
+              dayOfWeek: schedule.day,
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+            });
+          },
+          error: () => this.scheduleDetail.set(null),
+        });
+    }
+  }
+
+  private maybeLoadSchoolYears(): void {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return;
+    }
+
+    const needsList =
+      this.view() === 'school-years' || this.view() === 'schedule-create' || this.view() === 'schedule-edit';
+
+    if (needsList && !this.schoolYears().length && !this.schoolYearsLoading()) {
+      this.schoolYearsLoading.set(true);
+      this.managementData
+        .getSchoolYears()
+        .pipe(
+          finalize(() => this.schoolYearsLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((years) => this.schoolYears.set(years));
+    }
+
+    if (this.view() === 'school-year-edit') {
+      const id = this.selectedSchoolYearId();
+
+      if (!id) {
+        return;
+      }
+
+      this.managementData
+        .getSchoolYear(id)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (year) => {
+            this.schoolYearDetail.set(year);
+            this.schoolYearForm.patchValue({
+              name: year.name,
+              startDate: year.startDate,
+              endDate: year.endDate,
+              status: year.status,
+            });
+          },
+          error: () => this.schoolYearDetail.set(null),
+        });
+    }
+  }
+
+  private maybeLoadCareers(): void {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return;
+    }
+
+    if (
+      (this.view() === 'careers' || this.view() === 'career-create' || this.view() === 'career-edit') &&
+      !this.careerDirectors().length
+    ) {
+      this.managementData
+        .getCareerDirectors()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((directors) => this.careerDirectors.set(directors));
+    }
+
+    if (this.view() === 'careers') {
+      this.careersLoading.set(true);
+      this.managementData
+        .getCareers()
+        .pipe(
+          finalize(() => this.careersLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((careers) => this.careers.set(careers));
+      return;
+    }
+
+    if (this.view() === 'career-edit') {
+      const id = this.selectedCareerId();
+
+      if (!id) {
+        return;
+      }
+
+      this.careerDetailLoading.set(true);
+      this.managementData
+        .getCareer(id)
+        .pipe(
+          finalize(() => this.careerDetailLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe({
+          next: (career) => {
+            this.careerDetail.set(career);
+            this.careerForm.patchValue({
+              name: career.name,
+              shortName: career.shortName,
+              code: career.code,
+              directorId: career.directorId,
+            });
+          },
+          error: () => this.careerDetail.set(null),
+        });
+    }
+  }
+
+  private maybeLoadAttendanceSettings(): void {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return;
+    }
+
+    if (this.view() === 'attendance-settings') {
+      this.attendanceSettingsLoading.set(true);
+      this.managementData
+        .getAttendanceSettings()
+        .pipe(
+          finalize(() => this.attendanceSettingsLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((settings) => this.attendanceSettings.set(settings));
+      return;
+    }
+
+    if (this.view() === 'attendance-setting-edit') {
+      const id = this.selectedAttendanceSettingId();
+
+      if (!id) {
+        return;
+      }
+
+      this.attendanceSettingDetailLoading.set(true);
+      this.managementData
+        .getAttendanceSetting(id)
+        .pipe(
+          finalize(() => this.attendanceSettingDetailLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe({
+          next: (setting) => {
+            this.attendanceSettingDetail.set(setting);
+            this.attendanceSettingForm.patchValue({
+              scheduleId: setting.scheduleId,
+              presentToleranceMinutes: setting.presentToleranceMinutes,
+              lateToleranceMinutes: setting.lateToleranceMinutes,
+              allowManualAttendance: setting.allowManualAttendance,
+            });
+          },
+          error: () => this.attendanceSettingDetail.set(null),
+        });
+    }
+  }
+
+  protected submitCareerForm(): void {
+    if (this.careerForm.invalid || this.submitting()) {
+      this.careerForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.careerForm.getRawValue();
+    const payload: CareerFormPayload = {
+      name: raw.name,
+      shortName: raw.shortName,
+      code: raw.code,
+      directorId: raw.directorId,
+    };
+
+    const editingId = this.view() === 'career-edit' ? this.selectedCareerId() : '';
+    const request$ = editingId
+      ? this.managementData.updateCareer(editingId, payload)
+      : this.managementData.createCareer(payload);
+
+    this.submitting.set(true);
+    request$.pipe(finalize(() => this.submitting.set(false))).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success(
+          editingId ? 'Carrera actualizada' : 'Carrera creada',
+          editingId ? 'Los cambios fueron guardados.' : 'La nueva carrera quedo registrada.',
+        );
+        this.careers.set([]);
+        void this.router.navigateByUrl(`${this.baseRoute()}/careers`);
+        return;
+      }
+
+      this.toastService.error(
+        editingId ? 'No se pudo guardar' : 'No se pudo crear',
+        result.message ?? 'Verifica los datos e intenta nuevamente.',
+      );
+    });
+  }
+
+  protected async deactivateCareer(career: ManagementCareer): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Dar de baja carrera',
+      message: `${career.name} dejara de estar activa. Solo es posible si no tiene grupos activos asignados.`,
+      confirmText: 'Dar de baja',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-regular fa-building-columns',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.managementData.deactivateCareer(career.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Carrera dada de baja', 'La carrera ya no esta activa.');
+        this.careers.update((current) =>
+          current.map((item) => (item.id === career.id ? { ...item, isActive: false } : item)),
+        );
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected reactivateCareer(career: ManagementCareer): void {
+    this.managementData.reactivateCareer(career.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Carrera reactivada', 'La carrera vuelve a estar activa.');
+        this.careers.update((current) =>
+          current.map((item) => (item.id === career.id ? { ...item, isActive: true } : item)),
+        );
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected submitAttendanceSettingForm(): void {
+    if (this.attendanceSettingForm.invalid || this.submitting()) {
+      this.attendanceSettingForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.attendanceSettingForm.getRawValue();
+    const payload: AttendanceSettingFormPayload = {
+      scheduleId: raw.scheduleId,
+      presentToleranceMinutes: raw.presentToleranceMinutes,
+      lateToleranceMinutes: raw.lateToleranceMinutes,
+      allowManualAttendance: raw.allowManualAttendance,
+    };
+
+    const editingId = this.view() === 'attendance-setting-edit' ? this.selectedAttendanceSettingId() : '';
+    const request$ = editingId
+      ? this.managementData.updateAttendanceSetting(editingId, payload)
+      : this.managementData.createAttendanceSetting(payload);
+
+    this.submitting.set(true);
+    request$.pipe(finalize(() => this.submitting.set(false))).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success(
+          editingId ? 'Regla actualizada' : 'Regla creada',
+          editingId ? 'Los cambios fueron guardados.' : 'La nueva regla de asistencia quedo registrada.',
+        );
+        this.attendanceSettings.set([]);
+        void this.router.navigateByUrl(`${this.baseRoute()}/attendance-settings`);
+        return;
+      }
+
+      this.toastService.error(
+        editingId ? 'No se pudo guardar' : 'No se pudo crear',
+        result.message ?? 'Verifica los datos e intenta nuevamente.',
+      );
+    });
+  }
+
+  protected async deactivateAttendanceSetting(setting: ManagementAttendanceSetting): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Desactivar regla de asistencia',
+      message: `La regla para ${setting.scheduleLabel} dejara de aplicarse.`,
+      confirmText: 'Desactivar',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-regular fa-calendar-xmark',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.managementData.deactivateAttendanceSetting(setting.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Regla desactivada', 'La regla ya no esta activa.');
+        this.attendanceSettings.update((current) =>
+          current.map((item) => (item.id === setting.id ? { ...item, isActive: false } : item)),
+        );
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected reactivateAttendanceSetting(setting: ManagementAttendanceSetting): void {
+    this.managementData.reactivateAttendanceSetting(setting.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Regla activada', 'La regla vuelve a estar activa.');
+        this.attendanceSettings.update((current) =>
+          current.map((item) => (item.id === setting.id ? { ...item, isActive: true } : item)),
+        );
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected submitScheduleForm(): void {
+    if (this.scheduleForm.invalid || this.submitting()) {
+      this.scheduleForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.scheduleForm.getRawValue();
+    const payload: ScheduleFormPayload = {
+      schoolYearId: raw.schoolYearId,
+      groupId: raw.groupId,
+      subjectId: raw.subjectId,
+      teacherId: raw.teacherId,
+      classroomId: raw.classroomId,
+      dayOfWeek: raw.dayOfWeek,
+      startTime: raw.startTime,
+      endTime: raw.endTime,
+    };
+
+    const editingId = this.view() === 'schedule-edit' ? this.selectedScheduleId() : '';
+    const request$ = editingId
+      ? this.managementData.updateSchedule(editingId, payload)
+      : this.managementData.createSchedule(payload);
+
+    this.submitting.set(true);
+    request$.pipe(finalize(() => this.submitting.set(false))).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success(
+          editingId ? 'Horario actualizado' : 'Horario creado',
+          editingId ? 'Los cambios fueron guardados.' : 'El nuevo horario quedo registrado.',
+        );
+        this.schedules.set([]);
+        void this.router.navigateByUrl(`${this.baseRoute()}/schedules`);
+        return;
+      }
+
+      this.toastService.error(
+        editingId ? 'No se pudo guardar' : 'No se pudo crear',
+        result.message ?? 'Verifica que no haya un conflicto de horario.',
+      );
+    });
+  }
+
+  protected async deactivateSchedule(schedule: ManagementSchedule): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Dar de baja horario',
+      message: `${schedule.subject} - ${schedule.group} (${schedule.day} ${schedule.time}) dejara de estar activo.`,
+      confirmText: 'Dar de baja',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-regular fa-calendar-xmark',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.managementData.deactivateSchedule(schedule.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Horario dado de baja', 'El horario ya no esta activo.');
+        this.schedules.update((current) => current.filter((item) => item.id !== schedule.id));
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected submitSchoolYearForm(): void {
+    if (this.schoolYearForm.invalid || this.submitting()) {
+      this.schoolYearForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.schoolYearForm.getRawValue();
+    const editingId = this.view() === 'school-year-edit' ? this.selectedSchoolYearId() : '';
+    const payload: SchoolYearFormPayload = {
+      name: raw.name,
+      startDate: raw.startDate,
+      endDate: raw.endDate,
+      ...(editingId ? { status: raw.status } : {}),
+    };
+
+    const request$ = editingId
+      ? this.managementData.updateSchoolYear(editingId, payload)
+      : this.managementData.createSchoolYear(payload);
+
+    this.submitting.set(true);
+    request$.pipe(finalize(() => this.submitting.set(false))).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success(
+          editingId ? 'Periodo actualizado' : 'Periodo creado',
+          editingId ? 'Los cambios fueron guardados.' : 'El nuevo periodo academico quedo registrado.',
+        );
+        this.schoolYears.set([]);
+        void this.router.navigateByUrl(`${this.baseRoute()}/academic-periods`);
+        return;
+      }
+
+      this.toastService.error(
+        editingId ? 'No se pudo guardar' : 'No se pudo crear',
+        result.message ?? 'Verifica los datos e intenta nuevamente.',
+      );
+    });
   }
 
   private maybeLoadIncidentDetail(): void {
@@ -1386,6 +2532,17 @@ export class ManagementWorkspaceComponent implements OnInit {
       'teacher-attendance': 'Revision de asistencias',
       subjects: 'Materias',
       schedules: 'Horario de clases',
+      'schedule-create': 'Nuevo horario',
+      'schedule-edit': 'Editar horario',
+      'school-years': 'Periodos academicos',
+      'school-year-create': 'Nuevo periodo academico',
+      'school-year-edit': 'Editar periodo academico',
+      careers: 'Carreras',
+      'career-create': 'Nueva carrera',
+      'career-edit': 'Editar carrera',
+      'attendance-settings': 'Reglas de asistencia',
+      'attendance-setting-create': 'Nueva regla de asistencia',
+      'attendance-setting-edit': 'Editar regla de asistencia',
       attendance: 'Revision de asistencias',
       justifications: 'Justificantes',
       devices: 'Gestion de dispositivos',
@@ -1417,6 +2574,17 @@ export class ManagementWorkspaceComponent implements OnInit {
       'teacher-attendance': 'Revision historica de asistencias por clase.',
       subjects: 'Materias con profesor, grupo, horario y ubicacion.',
       schedules: 'Horario semanal de grupos y profesores de la carrera.',
+      'schedule-create': 'Registra un nuevo horario de clase con su profesor, grupo y salon.',
+      'schedule-edit': 'Actualiza el profesor, grupo, salon u horario de esta clase.',
+      'school-years': 'Ciclos escolares registrados y su estado actual.',
+      'school-year-create': 'Registra un nuevo ciclo escolar con sus fechas.',
+      'school-year-edit': 'Actualiza las fechas o el estado de este ciclo escolar.',
+      careers: 'Programas academicos, su codigo y el director de carrera asignado.',
+      'career-create': 'Registra una nueva carrera y asigna su director.',
+      'career-edit': 'Actualiza el nombre, codigo o director de esta carrera.',
+      'attendance-settings': 'Tolerancias y reglas del pase de lista por horario.',
+      'attendance-setting-create': 'Configura las tolerancias de asistencia de un horario.',
+      'attendance-setting-edit': 'Actualiza las tolerancias de asistencia de este horario.',
       attendance: 'Audita registros de asistencia y estados por materia.',
       justifications: 'Seguimiento de justificantes aprobados, pendientes y rechazados.',
       devices: 'Monitorea terminales NFC y estado operativo por aula.',
@@ -1499,6 +2667,10 @@ export class ManagementWorkspaceComponent implements OnInit {
     return this.authService.currentUser()?.role;
   }
 
+  protected isAdmin(): boolean {
+    return this.currentRole() === UserRole.ADMIN;
+  }
+
   protected canEditDevices(): boolean {
     return this.currentRole() === UserRole.ADMIN;
   }
@@ -1508,11 +2680,14 @@ export class ManagementWorkspaceComponent implements OnInit {
   }
 
   protected canCreateIncidents(): boolean {
-    return this.currentRole() === UserRole.CAREER_DIRECTOR;
+    return this.currentRole() === UserRole.CAREER_DIRECTOR || this.currentRole() === UserRole.ADMIN;
   }
 
   protected canCloseIncident(incident: ManagementIncident): boolean {
-    return this.currentRole() === UserRole.CAREER_DIRECTOR && incident.status.label.toUpperCase() === 'ACTIVO';
+    return (
+      (this.currentRole() === UserRole.CAREER_DIRECTOR || this.currentRole() === UserRole.ADMIN) &&
+      incident.status.label.toUpperCase() === 'ACTIVO'
+    );
   }
 
   protected incidentCountByStatus(status: string): number {
@@ -1596,6 +2771,10 @@ export class ManagementWorkspaceComponent implements OnInit {
     return ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes'];
   }
 
+  protected directorSchedulesForSelectedDay(): ManagementSchedule[] {
+    return this.snapshot().schedules.filter((schedule) => schedule.day.toUpperCase() === this.selectedScheduleDay());
+  }
+
   protected attendanceRows() {
     const student = this.selectedStudent();
 
@@ -1617,9 +2796,7 @@ export class ManagementWorkspaceComponent implements OnInit {
   }
 
   protected auditLogs(): ManagementAuditLog[] {
-    const entity = this.auditEntity();
-    const logs = this.snapshot().logs.filter((log) => log.entity === entity);
-    return logs.length ? logs : this.snapshot().logs;
+    return this.auditLogsByEntity()[this.auditEntity()] ?? [];
   }
 
   protected auditEntityLabel(): string {
@@ -1968,6 +3145,10 @@ export class ManagementWorkspaceComponent implements OnInit {
     this.selectedIncidentId.set(params.get('incidentId') ?? '');
     this.selectedClaimId.set(params.get('claimId') ?? '');
     this.selectedDeviceId.set(params.get('deviceId') ?? '');
+    this.selectedScheduleId.set(params.get('scheduleId') ?? '');
+    this.selectedSchoolYearId.set(params.get('schoolYearId') ?? '');
+    this.selectedCareerId.set(params.get('careerId') ?? '');
+    this.selectedAttendanceSettingId.set(params.get('attendanceSettingId') ?? '');
     this.auditEntity.set(this.readAuditEntity(params.get('entity')));
   }
 
@@ -1990,6 +3171,12 @@ export class ManagementWorkspaceComponent implements OnInit {
       },
       { emitEvent: false },
     );
+
+    if (this.canEditDevices()) {
+      this.deviceForm.controls.classroomId.enable({ emitEvent: false });
+    } else {
+      this.deviceForm.controls.classroomId.disable({ emitEvent: false });
+    }
   }
 
   private claimStatusFromAction(action: string): ManagementStatus {

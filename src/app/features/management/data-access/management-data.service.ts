@@ -6,13 +6,17 @@ import { unwrapData } from '../../../core/api/api-adapter';
 import { UserRole } from '../../../core/enums/user-role.enum';
 import { apiErrorMessage } from '../../../shared/utils/api-error.util';
 import {
+  AttendanceSettingFormPayload,
+  CareerFormPayload,
   DeviceCreatePayload,
   EMPTY_MANAGEMENT_SNAPSHOT,
   IncidentCreatePayload,
   IncidentRosterStatus,
-  IncidentUpdatePayload,
   ManagementActionResult,
+  ManagementAttendanceSetting,
   ManagementAuditLog,
+  ManagementCareer,
+  ManagementCareerDirector,
   ManagementCharts,
   ManagementClaim,
   ManagementClassroom,
@@ -23,12 +27,15 @@ import {
   ManagementIncidentRosterItem,
   ManagementJustification,
   ManagementSchedule,
+  ManagementSchoolYear,
   ManagementSnapshot,
   ManagementStatus,
   ManagementStudent,
   ManagementSubject,
   ManagementTeacher,
   ManagementTutor,
+  ScheduleFormPayload,
+  SchoolYearFormPayload,
 } from '../models/management.model';
 
 type UnknownRecord = Record<string, unknown>;
@@ -68,7 +75,9 @@ export class ManagementDataService {
             devices: this.getDevices().pipe(catchError(() => of([]))),
             incidents: this.getIncidents().pipe(catchError(() => of([]))),
             claims: this.getClaims().pipe(catchError(() => of([]))),
-            logs: this.getLogs('students').pipe(catchError(() => of([]))),
+            // Audit logs are only relevant on the audit screens, not on every management page
+            // load — fetched on demand per entity by the workspace component instead.
+            logs: of([] as ManagementAuditLog[]),
             charts: this.getCharts().pipe(catchError(() => of(EMPTY_MANAGEMENT_SNAPSHOT.charts))),
           });
         }),
@@ -102,12 +111,12 @@ export class ManagementDataService {
   }
 
   private schedulesForGroup(groupId: string | undefined): Observable<ManagementSchedule[]> {
-    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+    if (!this.isDirectorOrAdmin()) {
       return of([]);
     }
 
     return groupId
-      ? this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
+      ? this.checkmateApi.getCollection(`${this.scopeBase()}/groups/${groupId}/schedule`, (item, index) =>
           this.toSchedule(item, index),
         )
       : of([]);
@@ -128,13 +137,13 @@ export class ManagementDataService {
   }
 
   private justificationsForStudent(studentId: string | undefined): Observable<ManagementJustification[]> {
-    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+    if (!this.isDirectorOrAdmin()) {
       return of([]);
     }
 
     return studentId
       ? this.checkmateApi.getCollection(
-          `${this.directorBase()}/students/${studentId}/justifications`,
+          `${this.scopeBase()}/students/${studentId}/justifications`,
           (item, index) => this.toJustification(item, index),
         )
       : of([]);
@@ -167,36 +176,381 @@ export class ManagementDataService {
   }
 
   getIncidents(): Observable<ManagementIncident[]> {
-    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+    if (!this.isDirectorOrAdmin()) {
       return of([]);
     }
 
-    return this.checkmateApi.getCollection(`${this.directorBase()}/incidents`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/incidents`, (item, index) =>
       this.toIncident(item, index),
     );
   }
 
   getIncident(incidentId: string): Observable<ManagementIncident> {
-    return this.checkmateApi.get<unknown>(`${this.directorBase()}/incidents/${incidentId}`).pipe(
+    return this.checkmateApi.get<unknown>(`${this.scopeBase()}/incidents/${incidentId}`).pipe(
       map((response) => this.toIncident(unwrapData(response), 0)),
     );
   }
 
   getGroupSchedule(groupId: string): Observable<ManagementSchedule[]> {
-    return this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/schedule`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/groups/${groupId}/schedule`, (item, index) =>
       this.toSchedule(item, index),
     );
   }
 
   getGroupStudentsForIncident(groupId: string): Observable<ManagementStudent[]> {
-    return this.checkmateApi.getCollection(`${this.directorBase()}/groups/${groupId}/students`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/groups/${groupId}/students`, (item, index) =>
       this.toStudent(item, index),
     );
   }
 
+  /**
+   * Full schedule CRUD only exists for admin (see ManagementDataService's `getGroupSchedule`
+   * for the read-only per-group view directors use instead).
+   */
+  getSchedules(): Observable<ManagementSchedule[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/schedules`, (item, index) =>
+      this.toSchedule(item, index),
+    );
+  }
+
+  getSchedule(scheduleId: string): Observable<ManagementSchedule> {
+    return this.checkmateApi.get<unknown>(`${this.adminBase()}/schedules/${scheduleId}`).pipe(
+      map((response) => this.toSchedule(unwrapData(response), 0)),
+    );
+  }
+
+  createSchedule(payload: ScheduleFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.post<unknown>(`${this.adminBase()}/schedules`, this.scheduleRequestBody(payload)).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  updateSchedule(scheduleId: string, payload: ScheduleFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/schedules/${scheduleId}`, this.scheduleRequestBody(payload))
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  deactivateSchedule(scheduleId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.delete<unknown>(`${this.adminBase()}/schedules/${scheduleId}`, { confirm: true }).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  getSchoolYears(): Observable<ManagementSchoolYear[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/school-years`, (item, index) =>
+      this.toSchoolYear(item, index),
+    );
+  }
+
+  getSchoolYear(schoolYearId: string): Observable<ManagementSchoolYear> {
+    return this.checkmateApi.get<unknown>(`${this.adminBase()}/school-years/${schoolYearId}`).pipe(
+      map((response) => this.toSchoolYear(unwrapData(response), 0)),
+    );
+  }
+
+  createSchoolYear(payload: SchoolYearFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .post<unknown>(`${this.adminBase()}/school-years`, {
+        name: payload.name,
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+      })
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  updateSchoolYear(schoolYearId: string, payload: SchoolYearFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/school-years/${schoolYearId}`, {
+        name: payload.name,
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+        ...(payload.status ? { status: payload.status } : {}),
+      })
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  getCareers(): Observable<ManagementCareer[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/careers?include_inactive=true`, (item, index) =>
+      this.toCareer(item, index),
+    );
+  }
+
+  getCareer(careerId: string): Observable<ManagementCareer> {
+    return this.checkmateApi
+      .get<unknown>(`${this.adminBase()}/careers/${careerId}`)
+      .pipe(map((response) => this.toCareer(unwrapData(response), 0)));
+  }
+
+  getCareerDirectors(): Observable<ManagementCareerDirector[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/users/permissions`, (item) => this.toCareerDirector(item)).pipe(
+      map((users) => users.filter((user): user is ManagementCareerDirector => user !== null)),
+    );
+  }
+
+  createCareer(payload: CareerFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.post<unknown>(`${this.adminBase()}/careers`, this.careerRequestBody(payload)).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  updateCareer(careerId: string, payload: CareerFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/careers/${careerId}`, this.careerRequestBody(payload))
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  deactivateCareer(careerId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.delete<unknown>(`${this.adminBase()}/careers/${careerId}`, { confirm: true }).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  reactivateCareer(careerId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.put<unknown>(`${this.adminBase()}/careers/${careerId}`, { is_active: true }).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  private careerRequestBody(payload: CareerFormPayload): UnknownRecord {
+    return {
+      name: payload.name,
+      short_name: payload.shortName || null,
+      code: payload.code,
+      director_id: Number(payload.directorId),
+    };
+  }
+
+  private toCareer(value: unknown, index: number): ManagementCareer {
+    const record = toRecord(value);
+    const fallback = emptyCareer(index);
+    const director = toRecord(record?.['director']);
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      name: readString(record, 'name', fallback.name),
+      shortName: readString(record, 'short_name', fallback.shortName),
+      code: readString(record, 'code', fallback.code),
+      isActive: readBoolean(record, 'is_active', fallback.isActive),
+      directorId: readIdField(director, 'id', fallback.directorId),
+      directorName: readString(director, 'full_name', fallback.directorName),
+      groupsCount: readNumber(record, 'groups_count', fallback.groupsCount),
+    };
+  }
+
+  private toCareerDirector(value: unknown): ManagementCareerDirector | null {
+    const record = toRecord(value);
+
+    if (readString(record, 'role', '') !== 'director_carrera') {
+      return null;
+    }
+
+    return {
+      id: readId(record, ''),
+      fullName: readString(record, 'full_name', ''),
+    };
+  }
+
+  getAttendanceSettings(): Observable<ManagementAttendanceSetting[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/attendance-settings`, (item, index) =>
+      this.toAttendanceSetting(item, index),
+    );
+  }
+
+  getAttendanceSetting(attendanceSettingId: string): Observable<ManagementAttendanceSetting> {
+    return this.checkmateApi
+      .get<unknown>(`${this.adminBase()}/attendance-settings/${attendanceSettingId}`)
+      .pipe(map((response) => this.toAttendanceSetting(unwrapData(response), 0)));
+  }
+
+  createAttendanceSetting(payload: AttendanceSettingFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .post<unknown>(`${this.adminBase()}/attendance-settings`, this.attendanceSettingRequestBody(payload))
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  updateAttendanceSetting(
+    attendanceSettingId: string,
+    payload: AttendanceSettingFormPayload,
+  ): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(
+        `${this.adminBase()}/attendance-settings/${attendanceSettingId}`,
+        this.attendanceSettingRequestBody(payload),
+      )
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  deactivateAttendanceSetting(attendanceSettingId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.delete<unknown>(`${this.adminBase()}/attendance-settings/${attendanceSettingId}`).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  reactivateAttendanceSetting(attendanceSettingId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/attendance-settings/${attendanceSettingId}`, { is_active: true })
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  private attendanceSettingRequestBody(payload: AttendanceSettingFormPayload): UnknownRecord {
+    return {
+      schedule_id: Number(payload.scheduleId),
+      present_tolerance_minutes: Number(payload.presentToleranceMinutes),
+      late_tolerance_minutes: Number(payload.lateToleranceMinutes),
+      allow_manual_attendance: payload.allowManualAttendance,
+    };
+  }
+
+  private toAttendanceSetting(value: unknown, index: number): ManagementAttendanceSetting {
+    const record = toRecord(value);
+    const fallback = emptyAttendanceSetting(index);
+    const schedule = toRecord(record?.['schedule']);
+    const scheduleLabel = schedule
+      ? `${readString(schedule, 'subject', '')} - ${readString(schedule, 'group', '')} (${readString(schedule, 'day_of_week', '')} ${readString(schedule, 'start_time', '')}-${readString(schedule, 'end_time', '')})`
+      : fallback.scheduleLabel;
+
+    return {
+      ...fallback,
+      id: readId(record, fallback.id),
+      scheduleId: readIdField(record, 'schedule_id', fallback.scheduleId),
+      scheduleLabel,
+      presentToleranceMinutes: readNumber(record, 'present_tolerance_minutes', fallback.presentToleranceMinutes),
+      lateToleranceMinutes: readNumber(record, 'late_tolerance_minutes', fallback.lateToleranceMinutes),
+      allowManualAttendance: readBoolean(record, 'allow_manual_attendance', fallback.allowManualAttendance),
+      isActive: readBoolean(record, 'is_active', fallback.isActive),
+    };
+  }
+
+  private toSchoolYear(value: unknown, index: number): ManagementSchoolYear {
+    const record = toRecord(value);
+
+    return {
+      id: readId(record, String(index + 1)),
+      name: readString(record, 'name', ''),
+      startDate: readString(record, 'start_date', ''),
+      endDate: readString(record, 'end_date', ''),
+      status: readString(record, 'status', 'PROXIMO'),
+      groupsCount: readNumber(record, 'groups_count', 0),
+    };
+  }
+
+  private scheduleRequestBody(payload: ScheduleFormPayload): UnknownRecord {
+    return {
+      school_year_id: Number(payload.schoolYearId),
+      group_id: Number(payload.groupId),
+      subject_id: Number(payload.subjectId),
+      teacher_id: Number(payload.teacherId),
+      classroom_id: Number(payload.classroomId),
+      day_of_week: payload.dayOfWeek,
+      start_time: payload.startTime,
+      end_time: payload.endTime,
+    };
+  }
+
   getClaims(): Observable<ManagementClaim[]> {
-    if (this.currentRole() === UserRole.CAREER_DIRECTOR) {
-      return this.checkmateApi.getCollection(`${this.directorBase()}/claims`, (item, index) =>
+    if (this.isDirectorOrAdmin()) {
+      return this.checkmateApi.getCollection(`${this.scopeBase()}/claims`, (item, index) =>
         this.toClaim(item, index),
       );
     }
@@ -211,21 +565,21 @@ export class ManagementDataService {
   }
 
   getLogs(entity: ManagementAuditLog['entity']): Observable<ManagementAuditLog[]> {
-    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+    if (!this.isDirectorOrAdmin()) {
       return of([]);
     }
 
-    return this.checkmateApi.getCollection(`${this.directorBase()}/logs/${entity}`, (item, index) =>
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/logs/${entity}`, (item, index) =>
       this.toLog(item, index, entity),
     );
   }
 
   getCharts(): Observable<ManagementCharts> {
-    if (this.currentRole() !== UserRole.CAREER_DIRECTOR) {
+    if (!this.isDirectorOrAdmin()) {
       return of(EMPTY_MANAGEMENT_SNAPSHOT.charts);
     }
 
-    return this.checkmateApi.get<unknown>(`${this.directorBase()}/charts/summary`).pipe(
+    return this.checkmateApi.get<unknown>(`${this.scopeBase()}/charts/summary`).pipe(
       map((response) => this.toCharts(toRecord(unwrapData(response)) ?? {}, EMPTY_MANAGEMENT_SNAPSHOT.charts)),
       catchError(() => of(EMPTY_MANAGEMENT_SNAPSHOT.charts)),
     );
@@ -244,25 +598,7 @@ export class ManagementDataService {
       formData.set('evidence', payload.evidence);
     }
 
-    return this.checkmateApi.post<unknown>(`${this.directorBase()}/incidents`, formData).pipe(
-      map(() => ({ success: true, message: null })),
-      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
-    );
-  }
-
-  updateIncident(incidentId: string, payload: IncidentUpdatePayload): Observable<ManagementActionResult> {
-    const formData = new FormData();
-    formData.set('_method', 'PUT');
-    formData.set('title', payload.title);
-    formData.set('description', payload.description);
-    formData.set('type', payload.type);
-    formData.set('severity', payload.severity);
-
-    if (payload.evidence) {
-      formData.set('evidence', payload.evidence);
-    }
-
-    return this.checkmateApi.post<unknown>(`${this.directorBase()}/incidents/${incidentId}`, formData).pipe(
+    return this.checkmateApi.post<unknown>(`${this.scopeBase()}/incidents`, formData).pipe(
       map(() => ({ success: true, message: null })),
       catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
     );
@@ -270,7 +606,7 @@ export class ManagementDataService {
 
   closeIncident(incidentId: string, resolution: string): Observable<ManagementActionResult> {
     return this.checkmateApi
-      .post<unknown>(`${this.directorBase()}/incidents/${incidentId}/close`, { resolution })
+      .post<unknown>(`${this.scopeBase()}/incidents/${incidentId}/close`, { resolution })
       .pipe(
         map(() => ({ success: true, message: null })),
         catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
@@ -279,7 +615,7 @@ export class ManagementDataService {
 
   updateIncidentStudents(incidentId: string, roster: ManagementIncidentRosterItem[]): Observable<ManagementActionResult> {
     return this.checkmateApi
-      .patch<unknown>(`${this.directorBase()}/incidents/${incidentId}/students`, {
+      .patch<unknown>(`${this.scopeBase()}/incidents/${incidentId}/students`, {
         students: roster.map((item) => ({
           student_id: item.studentId,
           status: item.status,
@@ -293,7 +629,7 @@ export class ManagementDataService {
   }
 
   updateClaimAction(claimId: string, action: string, comment: string): Observable<ManagementActionResult> {
-    const base = this.currentRole() === UserRole.TUTOR_TEACHER ? this.tutorBase() : this.directorBase();
+    const base = this.currentRole() === UserRole.TUTOR_TEACHER ? this.tutorBase() : this.scopeBase();
     return this.checkmateApi.patch<unknown>(`${base}/claims/${claimId}/action`, { action, comment }).pipe(
       map(() => ({ success: true, message: null })),
       catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
@@ -438,6 +774,10 @@ export class ManagementDataService {
     return this.currentRole() === UserRole.CAREER_DIRECTOR ? this.directorBase() : this.adminBase();
   }
 
+  private isDirectorOrAdmin(): boolean {
+    return this.currentRole() === UserRole.CAREER_DIRECTOR || this.currentRole() === UserRole.ADMIN;
+  }
+
   private adminBase(): string {
     return '/administrador';
   }
@@ -489,6 +829,7 @@ export class ManagementDataService {
       studentCount: readNumber(record, 'student_count', fallback.studentCount),
       attendanceRate: readNumber(record, 'attendance_rate', fallback.attendanceRate),
       tutor: readString(record, 'tutor_name', fallback.tutor),
+      schoolYearId: readIdField(record, 'school_year_id', fallback.schoolYearId),
     };
   }
 
@@ -563,25 +904,39 @@ export class ManagementDataService {
     };
   }
 
+  /**
+   * Reused by two different backend shapes: the per-group read-only schedule (`schedule_id`,
+   * no `group`/`school_year_id`) and the admin's global schedule CRUD (`id`, full `group`
+   * object, `school_year_id`, `is_active`) — the raw-id fields simply stay empty/false when
+   * fed the narrower per-group shape, which is fine since only the CRUD list needs them.
+   */
   private toSchedule(value: unknown, index: number): ManagementSchedule {
     const record = toRecord(value);
     const fallback = emptySchedule(index);
     const subject = toRecord(record?.['subject']);
     const teacher = toRecord(record?.['teacher']);
     const classroom = toRecord(record?.['classroom']);
+    const group = toRecord(record?.['group']);
+    const startTime = readString(record, 'start_time', fallback.startTime);
+    const endTime = readString(record, 'end_time', fallback.endTime);
 
     return {
       ...fallback,
-      id: readId(record, fallback.id),
+      id: readId(record, readIdField(record, 'schedule_id', fallback.id)),
       day: readString(record, 'day_of_week', fallback.day),
-      time: `${readString(record, 'start_time', fallback.time.split(' - ')[0] ?? '')} - ${readString(
-        record,
-        'end_time',
-        fallback.time.split(' - ')[1] ?? '',
-      )}`,
+      time: `${startTime || fallback.time.split(' - ')[0] || ''} - ${endTime || fallback.time.split(' - ')[1] || ''}`,
       subject: readString(subject, 'name', fallback.subject),
       teacher: readString(teacher, 'full_name', fallback.teacher),
       classroom: readString(classroom, 'name', fallback.classroom),
+      group: readString(group, 'label', fallback.group),
+      schoolYearId: readIdField(record, 'school_year_id', fallback.schoolYearId),
+      groupId: readIdField(group, 'id', fallback.groupId),
+      subjectId: readIdField(subject, 'id', fallback.subjectId),
+      teacherId: readIdField(teacher, 'id', fallback.teacherId),
+      classroomId: readIdField(classroom, 'id', fallback.classroomId),
+      startTime,
+      endTime,
+      isActive: readBoolean(record, 'is_active', fallback.isActive),
     };
   }
 
@@ -794,7 +1149,11 @@ function readBoolean(record: UnknownRecord | null | undefined, key: string, fall
 }
 
 function readId(record: UnknownRecord | null | undefined, fallback: string): string {
-  const value = record?.['id'];
+  return readIdField(record, 'id', fallback);
+}
+
+function readIdField(record: UnknownRecord | null | undefined, key: string, fallback: string): string {
+  const value = record?.[key];
   return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;
 }
 
@@ -861,6 +1220,7 @@ function emptyGroup(index: number): ManagementGroup {
     studentCount: 0,
     attendanceRate: 0,
     tutor: 'Sin tutor asignado',
+    schoolYearId: '',
   };
 }
 
@@ -921,6 +1281,39 @@ function emptySchedule(index: number): ManagementSchedule {
     teacher: '',
     group: '',
     classroom: '',
+    schoolYearId: '',
+    groupId: '',
+    subjectId: '',
+    teacherId: '',
+    classroomId: '',
+    startTime: '',
+    endTime: '',
+    isActive: true,
+  };
+}
+
+function emptyCareer(index: number): ManagementCareer {
+  return {
+    id: String(index + 1),
+    name: 'Carrera',
+    shortName: '',
+    code: '',
+    isActive: true,
+    directorId: '',
+    directorName: 'Sin director asignado',
+    groupsCount: 0,
+  };
+}
+
+function emptyAttendanceSetting(index: number): ManagementAttendanceSetting {
+  return {
+    id: String(index + 1),
+    scheduleId: '',
+    scheduleLabel: 'Horario',
+    presentToleranceMinutes: 0,
+    lateToleranceMinutes: 0,
+    allowManualAttendance: true,
+    isActive: true,
   };
 }
 

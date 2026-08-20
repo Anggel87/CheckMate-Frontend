@@ -96,6 +96,10 @@ export interface TeacherAttendanceStudentView {
   enrollment: string;
   avatarUrl: string;
   status: AttendanceMark;
+  checkedIn: boolean;
+  registeredAt: string;
+  method: string;
+  nfcUid: string;
   disabled?: boolean;
 }
 
@@ -392,11 +396,15 @@ export class TeacherPortalApiService {
     });
   }
 
+  /**
+   * Opens the session if needed and PATCHes each mark, returning the (possibly newly created)
+   * session id so callers can remember it and avoid re-opening a session on the next call.
+   */
   saveAttendance(
     scheduleId: string,
     marks: Record<string, AttendanceMark>,
     existingSessionId?: string,
-  ): Observable<boolean> {
+  ): Observable<string> {
     const session$ = existingSessionId
       ? of(existingSessionId)
       : this.api
@@ -418,7 +426,9 @@ export class TeacherPortalApiService {
               .pipe(map(() => true)),
           );
 
-        return updates.length ? forkJoin(updates).pipe(map(() => true)) : of(true);
+        const complete$: Observable<unknown> = updates.length ? forkJoin(updates) : of(true);
+
+        return complete$.pipe(map(() => sessionId));
       }),
     );
   }
@@ -692,6 +702,10 @@ export class TeacherPortalApiService {
       enrollment: readFirstString(record, ['control_number', 'enrollment', 'matricula', 'student_number']) || readId(record),
       avatarUrl: readFirstString(record, ['photo_url', 'avatar_url']) || '/profile-avatar.svg',
       status: this.toAttendanceMark(status),
+      checkedIn: status !== '',
+      registeredAt: readString(record, 'registered_at'),
+      method: readString(record, 'method'),
+      nfcUid: readString(record, 'nfc_uid'),
     };
   }
 
