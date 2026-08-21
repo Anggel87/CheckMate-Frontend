@@ -4,12 +4,7 @@ export const USERS_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
-      ),
-    data: {
-      title: 'Usuarios',
-      description: 'Administra cuentas, roles y accesos del sistema.',
-    },
+      import('./pages/new-user/new-user.component').then((component) => component.NewUserComponent),
+    data: { topbarTitle: 'Nuevo usuario' },
   },
 ];

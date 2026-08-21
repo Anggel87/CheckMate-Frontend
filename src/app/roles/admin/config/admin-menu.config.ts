@@ -2,7 +2,7 @@ import { NavigationItem } from '../../../core/models/menu-item.model';
 
 export const ADMIN_MENU: NavigationItem[] = [
   { label: 'Dashboard', icon: 'fa-solid fa-house', route: '/admin/dashboard', permission: 'dashboard.view' },
-  { label: 'Usuarios', icon: 'fa-solid fa-user-shield', route: '/admin/users', permission: 'users.view' },
+  { label: 'Nuevo usuario', icon: 'fa-solid fa-user-plus', route: '/admin/users', permission: 'users.view' },
   { label: 'Alumnos', icon: 'fa-solid fa-user-graduate', route: '/admin/students', permission: 'students.view' },
   { label: 'Profesores', icon: 'fa-solid fa-chalkboard-user', route: '/admin/teachers', permission: 'teachers.view' },
   { label: 'Carreras', icon: 'fa-solid fa-building-columns', route: '/admin/careers', permission: 'careers.view' },
