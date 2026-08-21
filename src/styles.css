@@ -3980,6 +3980,14 @@ app-root {
   border-bottom: 0;
 }
 
+.student-request-row.is-unread {
+  background: var(--checkmate-info-soft);
+}
+
+.student-request-row.is-unread h2 {
+  font-weight: 800;
+}
+
 .student-request-row h2 {
   margin-top: 10px;
 }

@@ -12,6 +12,7 @@ export const CAREER_DIRECTOR_MENU: NavigationItem[] = [
   { label: 'Incidencias', icon: 'fa-solid fa-triangle-exclamation', route: '/director/incidents', permission: 'incidents.view' },
   { label: 'Reclamos', icon: 'fa-solid fa-message', route: '/director/claims', permission: 'claims.view' },
   { label: 'Justificantes', icon: 'fa-solid fa-file-circle-question', route: '/director/justifications', permission: 'justifications.view' },
+  { label: 'Notificaciones', icon: 'fa-solid fa-bell', route: '/director/notifications', permission: 'notifications.view' },
   { label: 'Reportes', icon: 'fa-solid fa-chart-simple', route: '/director/reports', permission: 'reports.view' },
   { label: 'Estadisticas', icon: 'fa-solid fa-chart-line', route: '/director/statistics', permission: 'statistics.view' },
   { label: 'Auditoria', icon: 'fa-solid fa-clipboard-list', route: '/director/audit', permission: 'audit.view' },

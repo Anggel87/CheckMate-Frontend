@@ -38,6 +38,12 @@ export const STUDENT_MENU: NavigationItem[] = [
     permission: 'attendance.view',
   },
   {
+    label: 'Notificaciones',
+    icon: 'fa-solid fa-bell',
+    route: '/student/notifications',
+    permission: 'notifications.view',
+  },
+  {
     label: 'Informacion',
     icon: 'fa-regular fa-user',
     route: '/student/profile',

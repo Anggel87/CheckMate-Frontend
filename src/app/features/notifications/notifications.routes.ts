@@ -3,13 +3,18 @@ import { Routes } from '@angular/router';
 export const NOTIFICATIONS_ROUTES: Routes = [
   {
     path: '',
+    data: { topbarTitle: 'Notificaciones' },
     loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
+      import('./pages/notifications-inbox/notifications-inbox.component').then(
+        (component) => component.NotificationsInboxComponent,
       ),
-    data: {
-      title: 'Notificaciones',
-      description: 'Consulta avisos del sistema y mensajes académicos.',
-    },
+  },
+  {
+    path: ':notificationId',
+    data: { topbarTitle: 'Notificacion' },
+    loadComponent: () =>
+      import('./pages/notification-inbox-detail/notification-inbox-detail.component').then(
+        (component) => component.NotificationInboxDetailComponent,
+      ),
   },
 ];

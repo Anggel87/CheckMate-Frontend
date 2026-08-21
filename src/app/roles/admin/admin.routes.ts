@@ -172,8 +172,8 @@ export const ADMIN_ROUTES: Routes = [
         canActivate: [permissionGuard],
         data: { permission: 'notifications.view' },
         loadChildren: () =>
-          import('../../features/notifications/notifications.routes').then(
-            (routes) => routes.NOTIFICATIONS_ROUTES,
+          import('../../features/notifications/admin-notifications.routes').then(
+            (routes) => routes.ADMIN_NOTIFICATIONS_ROUTES,
           ),
       },
       {

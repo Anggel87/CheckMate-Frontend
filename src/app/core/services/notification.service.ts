@@ -1,13 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { catchError, of } from 'rxjs';
-import {
-  formatApiDate,
-  readId,
-  readString,
-  toRecord,
-} from '../api/api-adapter';
+import { formatApiDate, readId, readString, toRecord } from '../api/api-adapter';
 import { CheckmateApiService } from '../api/checkmate-api.service';
 import { AuthService } from '../authentication/auth.service';
+import { ROUTE_PATHS } from '../constants/route-paths.constants';
 import { UserRole } from '../enums/user-role.enum';
 
 export interface AppNotification {
@@ -18,6 +14,14 @@ export interface AppNotification {
   read: boolean;
   route?: string;
 }
+
+const NOTIFICATIONS_BASE_PATH: Record<UserRole, string> = {
+  [UserRole.ADMIN]: '/administrador',
+  [UserRole.CAREER_DIRECTOR]: '/director-carrera',
+  [UserRole.TEACHER]: '/profesor',
+  [UserRole.TUTOR_TEACHER]: '/profesor',
+  [UserRole.STUDENT]: '/alumno',
+};
 
 @Injectable({
   providedIn: 'root',
@@ -40,38 +44,52 @@ export class NotificationService {
         notification.id === id ? { ...notification, read: true } : notification,
       ),
     );
+
+    const role = this.authService.currentUser()?.role;
+
+    if (!role) {
+      return;
+    }
+
+    this.api
+      .patch(`${NOTIFICATIONS_BASE_PATH[role]}/notifications/${id}/read`, {})
+      .pipe(catchError(() => of(null)))
+      .subscribe();
   }
 
   markAllAsRead(): void {
-    this.notificationsState.update((notifications) =>
-      notifications.map((notification) => ({ ...notification, read: true })),
-    );
+    this.notifications()
+      .filter((notification) => !notification.read)
+      .forEach((notification) => this.markAsRead(notification.id));
   }
 
   private load(): void {
-    if (this.authService.currentUser()?.role !== UserRole.ADMIN) {
+    const role = this.authService.currentUser()?.role;
+
+    if (!role) {
       this.notificationsState.set([]);
       return;
     }
 
     this.api
-      .getCollection('/administrador/notifications', (item) => this.toNotification(item))
+      .getCollection(`${NOTIFICATIONS_BASE_PATH[role]}/notifications`, (item) => this.toNotification(item, role))
       .pipe(catchError(() => of([])))
       .subscribe((notifications) => {
         this.notificationsState.set(notifications);
       });
   }
 
-  private toNotification(value: unknown): AppNotification {
+  private toNotification(value: unknown, role: UserRole): AppNotification {
     const record = toRecord(value);
+    const id = readId(record);
 
     return {
-      id: readId(record),
+      id,
       title: readString(record, 'title'),
       description: readString(record, 'message'),
-      dateLabel: formatApiDate(readString(record, 'created_at')),
+      dateLabel: formatApiDate(readString(record, 'sent_at')),
       read: readBooleanLike(record, 'is_read'),
-      route: undefined,
+      route: `${ROUTE_PATHS.rolePrefix[role]}/notifications/${id}`,
     };
   }
 }

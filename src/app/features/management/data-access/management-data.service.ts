@@ -37,6 +37,8 @@ import {
   ManagementTutor,
   ScheduleFormPayload,
   SchoolYearFormPayload,
+  SubjectCareerSummary,
+  SubjectFormPayload,
 } from '../models/management.model';
 
 type UnknownRecord = Record<string, unknown>;
@@ -152,6 +154,22 @@ export class ManagementDataService {
 
   getGroups(): Observable<ManagementGroup[]> {
     return this.checkmateApi.getCollection(`${this.scopeBase()}/groups`, (item, index) => this.toGroup(item, index));
+  }
+
+  /**
+   * Full roster across every group (admin: whole school; director: every group in
+   * their career) — unlike getGroupStudentsForIncident()/studentsForGroup(), this
+   * isn't scoped to a single group. Used to populate the notification recipient
+   * picker.
+   */
+  getStudents(): Observable<ManagementStudent[]> {
+    if (!this.isDirectorOrAdmin()) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.scopeBase()}/students`, (item, index) =>
+      this.toStudent(item, index),
+    );
   }
 
   getTeachers(): Observable<ManagementTeacher[]> {
@@ -419,6 +437,82 @@ export class ManagementDataService {
       map(() => ({ success: true, message: null })),
       catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
     );
+  }
+
+  getSubjects(): Observable<ManagementSubject[]> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of([]);
+    }
+
+    return this.checkmateApi.getCollection(`${this.adminBase()}/subjects`, (item, index) =>
+      this.toSubject(item, index),
+    );
+  }
+
+  getSubject(subjectId: string): Observable<ManagementSubject> {
+    return this.checkmateApi
+      .get<unknown>(`${this.adminBase()}/subjects/${subjectId}`)
+      .pipe(map((response) => this.toSubject(unwrapData(response), 0)));
+  }
+
+  createSubject(payload: SubjectFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.post<unknown>(`${this.adminBase()}/subjects`, this.subjectRequestBody(payload)).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  updateSubject(subjectId: string, payload: SubjectFormPayload): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi
+      .put<unknown>(`${this.adminBase()}/subjects/${subjectId}`, this.subjectRequestBody(payload))
+      .pipe(
+        map(() => ({ success: true, message: null })),
+        catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+      );
+  }
+
+  deactivateSubject(subjectId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.delete<unknown>(`${this.adminBase()}/subjects/${subjectId}`, { confirm: true }).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  reactivateSubject(subjectId: string): Observable<ManagementActionResult> {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return of({ success: false, message: 'No tienes permiso para esta accion.' });
+    }
+
+    return this.checkmateApi.put<unknown>(`${this.adminBase()}/subjects/${subjectId}`, { is_active: true }).pipe(
+      map(() => ({ success: true, message: null })),
+      catchError((error) => of({ success: false, message: apiErrorMessage(error, '') || null })),
+    );
+  }
+
+  private subjectRequestBody(payload: SubjectFormPayload): UnknownRecord {
+    const body: UnknownRecord = {
+      name: payload.name,
+      code: payload.code,
+      description: payload.description || null,
+    };
+
+    if (payload.careerIds) {
+      body['career_ids'] = payload.careerIds.map((id) => Number(id));
+    }
+
+    return body;
   }
 
   private careerRequestBody(payload: CareerFormPayload): UnknownRecord {
@@ -850,6 +944,11 @@ export class ManagementDataService {
         teacher: schedule.teacher,
         schedule: schedule.time,
         classroom: schedule.classroom,
+        code: '',
+        description: '',
+        isActive: true,
+        schedulesCount: 0,
+        careers: [],
       });
     });
 
@@ -886,7 +985,7 @@ export class ManagementDataService {
       ...fallback,
       id: readId(record, fallback.id),
       controlNumber: readString(record, 'control_number', fallback.controlNumber),
-      name: readString(record, 'full_name', readString(record, 'name', fallback.name)),
+      name: readString(record, 'full_name', readString(record, 'name', this.composeName(record, fallback.name))),
       group: readString(group, 'label', fallback.group),
       career: readString(career, 'name', fallback.career),
       email: readString(record, 'email', fallback.email),
@@ -900,6 +999,21 @@ export class ManagementDataService {
         ? { label: 'Activo', tone: 'success' }
         : { label: 'Inactivo', tone: 'neutral' },
     };
+  }
+
+  /**
+   * GroupStudentResource (used by Director\StudentController::index()/GroupController::
+   * students()) returns first_name/first_surname/second_surname separately, no full_name
+   * field — falls back to this instead of the generic "Alumno" placeholder.
+   */
+  private composeName(record: UnknownRecord | null, fallback: string): string {
+    const parts = [
+      readString(record, 'first_name', ''),
+      readString(record, 'first_surname', ''),
+      readString(record, 'second_surname', ''),
+    ].filter(Boolean);
+
+    return parts.length ? parts.join(' ') : fallback;
   }
 
   private toTutor(value: unknown): ManagementTutor {
@@ -932,15 +1046,37 @@ export class ManagementDataService {
     };
   }
 
+  /**
+   * A Subject entity has no intrinsic group/teacher/schedule/classroom (those belong
+   * to a Schedule, since one subject can be taught in many groups) — this only maps
+   * the real fields from `/administrador/subjects`. The group/teacher/schedule/
+   * classroom/semester fields stay at their empty fallback here and are only ever
+   * populated by subjectsFromSchedules() for the director's read-only derived view.
+   */
   private toSubject(value: unknown, index: number): ManagementSubject {
     const record = toRecord(value);
     const fallback = emptySubject(index);
+    const careersRaw = record?.['careers'];
 
     return {
       ...fallback,
       id: readId(record, fallback.id),
       name: readString(record, 'name', fallback.name),
-      semester: readString(record, 'semester', fallback.semester),
+      code: readString(record, 'code', fallback.code),
+      description: readString(record, 'description', fallback.description),
+      isActive: readBoolean(record, 'is_active', fallback.isActive),
+      schedulesCount: readNumber(record, 'schedules_count', fallback.schedulesCount),
+      careers: Array.isArray(careersRaw) ? careersRaw.map((item) => this.toSubjectCareer(item)) : fallback.careers,
+    };
+  }
+
+  private toSubjectCareer(value: unknown): SubjectCareerSummary {
+    const record = toRecord(value);
+
+    return {
+      id: readId(record, ''),
+      name: readString(record, 'name', ''),
+      shortName: readString(record, 'short_name', ''),
     };
   }
 
@@ -1309,6 +1445,11 @@ function emptySubject(index: number): ManagementSubject {
     teacher: '',
     schedule: '',
     classroom: '',
+    code: '',
+    description: '',
+    isActive: true,
+    schedulesCount: 0,
+    careers: [],
   };
 }
 

@@ -35,11 +35,13 @@ import {
   ManagementSnapshot,
   ManagementStatus,
   ManagementStudent,
+  ManagementSubject,
   ManagementTeacher,
   ManagementTutor,
   ManagementView,
   ScheduleFormPayload,
   SchoolYearFormPayload,
+  SubjectFormPayload,
 } from '../../models/management.model';
 
 @Component({
@@ -103,6 +105,13 @@ import {
             <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/careers/new'">
               <i class="fa-solid fa-plus" aria-hidden="true"></i>
               Nueva carrera
+            </a>
+          }
+
+          @if (view() === 'subjects' && isAdmin()) {
+            <a class="btn-checkmate btn-checkmate-primary" [routerLink]="baseRoute() + '/subjects/new'">
+              <i class="fa-solid fa-plus" aria-hidden="true"></i>
+              Nueva materia
             </a>
           }
 
@@ -546,23 +555,112 @@ import {
           }
 
           @case ('subjects') {
-            <div class="management-card-grid">
-              @for (subject of snapshot().subjects; track subject.id) {
-                <article class="checkmate-card management-card">
-                  <div class="management-card__header">
-                    <span class="management-icon"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span>
-                    <span class="status-badge status-badge--neutral">{{ subject.semester }}</span>
-                  </div>
-                  <h2>{{ subject.name }}</h2>
-                  <p>{{ subject.teacher }}</p>
-                  <dl class="management-data-grid">
-                    <div><dt>Grupo</dt><dd>{{ subject.group }}</dd></div>
-                    <div><dt>Horario</dt><dd>{{ subject.schedule }}</dd></div>
-                    <div><dt>Ubicacion</dt><dd>{{ subject.classroom }}</dd></div>
-                  </dl>
-                </article>
-              }
-            </div>
+            @if (isAdmin()) {
+              <div class="checkmate-card management-table-card">
+                <div class="management-table-wrap">
+                  <table class="management-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Codigo</th>
+                        <th>Carreras</th>
+                        <th>Horarios</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @if (subjectsLoading()) {
+                        <tr><td colspan="6">Cargando materias...</td></tr>
+                      } @else {
+                        @for (subject of subjects(); track subject.id) {
+                          <tr>
+                            <td><strong>{{ subject.name }}</strong></td>
+                            <td>{{ subject.code }}</td>
+                            <td>{{ subjectCareersLabel(subject) }}</td>
+                            <td>{{ subject.schedulesCount }}</td>
+                            <td>
+                              <span [class]="statusClass(subject.isActive ? { label: 'Activa', tone: 'success' } : { label: 'Inactiva', tone: 'neutral' })">
+                                {{ subject.isActive ? 'Activa' : 'Inactiva' }}
+                              </span>
+                            </td>
+                            <td>
+                              <div class="management-actions">
+                                <a
+                                  class="btn-checkmate btn-checkmate-secondary"
+                                  [routerLink]="baseRoute() + '/subjects/' + subject.id + '/edit'"
+                                >
+                                  Editar
+                                </a>
+                                @if (subject.isActive) {
+                                  <button
+                                    type="button"
+                                    class="btn-checkmate btn-checkmate-danger"
+                                    (click)="deactivateSubject(subject)"
+                                  >
+                                    Dar de baja
+                                  </button>
+                                } @else {
+                                  <button
+                                    type="button"
+                                    class="btn-checkmate btn-checkmate-primary"
+                                    (click)="reactivateSubject(subject)"
+                                  >
+                                    Reactivar
+                                  </button>
+                                }
+                              </div>
+                            </td>
+                          </tr>
+                        } @empty {
+                          <tr><td colspan="6">No hay materias registradas.</td></tr>
+                        }
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            } @else {
+              <div class="management-card-grid">
+                @for (subject of snapshot().subjects; track subject.id) {
+                  <article class="checkmate-card management-card">
+                    <div class="management-card__header">
+                      <span class="management-icon"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span>
+                      <span class="status-badge status-badge--neutral">{{ subject.semester }}</span>
+                    </div>
+                    <h2>{{ subject.name }}</h2>
+                    <p>{{ subject.teacher }}</p>
+                    <dl class="management-data-grid">
+                      <div><dt>Grupo</dt><dd>{{ subject.group }}</dd></div>
+                      <div><dt>Horario</dt><dd>{{ subject.schedule }}</dd></div>
+                      <div><dt>Ubicacion</dt><dd>{{ subject.classroom }}</dd></div>
+                    </dl>
+                  </article>
+                }
+              </div>
+            }
+          }
+
+          @case ('subject-create') {
+            <ng-container [ngTemplateOutlet]="subjectFormTemplate" [ngTemplateOutletContext]="{ editing: false }" />
+          }
+
+          @case ('subject-edit') {
+            @if (subjectDetailLoading()) {
+              <div class="management-loading checkmate-card">
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                Cargando materia...
+              </div>
+            } @else if (subjectDetail()) {
+              <ng-container [ngTemplateOutlet]="subjectFormTemplate" [ngTemplateOutletContext]="{ editing: true }" />
+            } @else {
+              <div class="empty-state checkmate-card">
+                <p>No se encontro la materia solicitada.</p>
+                <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/subjects'">
+                  Volver a materias
+                </a>
+              </div>
+            }
           }
 
           @case ('schedules') {
@@ -1774,6 +1872,55 @@ import {
         </form>
       </ng-template>
 
+      <ng-template #subjectFormTemplate let-editing="editing">
+        <form class="checkmate-card management-form" [formGroup]="subjectForm" (ngSubmit)="submitSubjectForm()">
+          <div class="management-form__grid">
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Nombre</span>
+              <input class="checkmate-input" type="text" formControlName="name" placeholder="Matematicas" />
+              @if (subjectForm.controls.name.touched && subjectForm.controls.name.invalid) {
+                <p class="checkmate-field-error">El nombre debe tener entre 3 y 100 caracteres.</p>
+              }
+            </label>
+            <label class="checkmate-form-field">
+              <span class="checkmate-label">Codigo</span>
+              <input class="checkmate-input" type="text" formControlName="code" placeholder="MAT-01" />
+              @if (subjectForm.controls.code.touched && subjectForm.controls.code.invalid) {
+                <p class="checkmate-field-error">Usa mayusculas, numeros y guiones (2-30 caracteres).</p>
+              }
+            </label>
+            <label class="checkmate-form-field management-form__full">
+              <span class="checkmate-label">Descripcion (opcional)</span>
+              <textarea class="checkmate-textarea" rows="3" formControlName="description" maxlength="255" placeholder="Descripcion breve de la materia"></textarea>
+            </label>
+          </div>
+          <div class="checkmate-form-field">
+            <span class="checkmate-label">Carreras</span>
+            <small>Selecciona las carreras donde se imparte esta materia. Si no seleccionas ninguna quedara sin asignar.</small>
+            <div class="teacher-checkbox-list">
+              @for (career of activeCareersForSubjectPicker(); track career.id) {
+                <label class="checkmate-checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="isSubjectCareerSelected(career.id)"
+                    (change)="toggleSubjectCareer(career.id)"
+                  />
+                  <span>{{ career.name }}@if (career.shortName) { ({{ career.shortName }}) }</span>
+                </label>
+              } @empty {
+                <p class="dropdown-empty">No hay carreras activas registradas.</p>
+              }
+            </div>
+          </div>
+          <footer class="management-form__footer">
+            <a class="btn-checkmate btn-checkmate-secondary" [routerLink]="baseRoute() + '/subjects'">Cancelar</a>
+            <button class="btn-checkmate btn-checkmate-primary" type="submit" [disabled]="submitting()">
+              {{ editing ? 'Guardar cambios' : 'Crear materia' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
+
       <ng-template #attendanceSettingFormTemplate let-editing="editing">
         <form
           class="checkmate-card management-form"
@@ -1875,6 +2022,12 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected readonly careerDetailLoading = signal(false);
   protected readonly selectedCareerId = signal('');
   protected readonly careerDirectors = signal<ManagementCareerDirector[]>([]);
+  protected readonly subjects = signal<ManagementSubject[]>([]);
+  protected readonly subjectsLoading = signal(false);
+  protected readonly subjectDetail = signal<ManagementSubject | null>(null);
+  protected readonly subjectDetailLoading = signal(false);
+  protected readonly selectedSubjectId = signal('');
+  protected readonly selectedSubjectCareerIds = signal<string[]>([]);
   protected readonly attendanceSettings = signal<ManagementAttendanceSetting[]>([]);
   protected readonly attendanceSettingsLoading = signal(false);
   protected readonly attendanceSettingDetail = signal<ManagementAttendanceSetting | null>(null);
@@ -1971,6 +2124,15 @@ export class ManagementWorkspaceComponent implements OnInit {
     directorId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
+  protected readonly subjectForm = new FormGroup({
+    name: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(3)] }),
+    code: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(/^[A-Z0-9-]{2,30}$/)],
+    }),
+    description: new FormControl('', { nonNullable: true }),
+  });
+
   protected readonly attendanceSettingForm = new FormGroup(
     {
       scheduleId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
@@ -2040,6 +2202,10 @@ export class ManagementWorkspaceComponent implements OnInit {
     { key: 'teachers' as const, label: 'Profesores', icon: 'fa-solid fa-chalkboard-user' },
   ];
 
+  protected readonly activeCareersForSubjectPicker = computed<ManagementCareer[]>(() =>
+    this.careers().filter((career) => career.isActive),
+  );
+
   protected readonly selectedStudent = computed<ManagementStudent | null>(() => {
     const students = this.snapshot().students;
     return students.find((student) => student.id === this.selectedStudentId()) ?? students[0] ?? null;
@@ -2077,6 +2243,7 @@ export class ManagementWorkspaceComponent implements OnInit {
         this.maybeLoadSchedules();
         this.maybeLoadSchoolYears();
         this.maybeLoadCareers();
+        this.maybeLoadSubjects();
         this.maybeLoadAttendanceSettings();
         this.maybeLoadClassrooms();
       });
@@ -2260,6 +2427,64 @@ export class ManagementWorkspaceComponent implements OnInit {
             });
           },
           error: () => this.careerDetail.set(null),
+        });
+    }
+  }
+
+  private maybeLoadSubjects(): void {
+    if (this.currentRole() !== UserRole.ADMIN) {
+      return;
+    }
+
+    if (this.view() === 'subjects') {
+      this.subjectsLoading.set(true);
+      this.managementData
+        .getSubjects()
+        .pipe(
+          finalize(() => this.subjectsLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe((subjects) => this.subjects.set(subjects));
+      return;
+    }
+
+    if ((this.view() === 'subject-create' || this.view() === 'subject-edit') && !this.careers().length) {
+      this.managementData
+        .getCareers()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((careers) => this.careers.set(careers));
+    }
+
+    if (this.view() === 'subject-create') {
+      this.selectedSubjectCareerIds.set([]);
+      return;
+    }
+
+    if (this.view() === 'subject-edit') {
+      const id = this.selectedSubjectId();
+
+      if (!id) {
+        return;
+      }
+
+      this.subjectDetailLoading.set(true);
+      this.managementData
+        .getSubject(id)
+        .pipe(
+          finalize(() => this.subjectDetailLoading.set(false)),
+          takeUntilDestroyed(this.destroyRef),
+        )
+        .subscribe({
+          next: (subject) => {
+            this.subjectDetail.set(subject);
+            this.selectedSubjectCareerIds.set(subject.careers.map((career) => career.id));
+            this.subjectForm.patchValue({
+              name: subject.name,
+              code: subject.code,
+              description: subject.description,
+            });
+          },
+          error: () => this.subjectDetail.set(null),
         });
     }
   }
@@ -2486,6 +2711,85 @@ export class ManagementWorkspaceComponent implements OnInit {
         this.toastService.success('Carrera reactivada', 'La carrera vuelve a estar activa.');
         this.careers.update((current) =>
           current.map((item) => (item.id === career.id ? { ...item, isActive: true } : item)),
+        );
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected submitSubjectForm(): void {
+    if (this.subjectForm.invalid || this.submitting()) {
+      this.subjectForm.markAllAsTouched();
+      return;
+    }
+
+    const raw = this.subjectForm.getRawValue();
+    const payload: SubjectFormPayload = {
+      name: raw.name,
+      code: raw.code,
+      description: raw.description,
+      careerIds: this.selectedSubjectCareerIds(),
+    };
+
+    const editingId = this.view() === 'subject-edit' ? this.selectedSubjectId() : '';
+    const request$ = editingId
+      ? this.managementData.updateSubject(editingId, payload)
+      : this.managementData.createSubject(payload);
+
+    this.submitting.set(true);
+    request$.pipe(finalize(() => this.submitting.set(false))).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success(
+          editingId ? 'Materia actualizada' : 'Materia creada',
+          editingId ? 'Los cambios fueron guardados.' : 'La nueva materia quedo registrada.',
+        );
+        this.subjects.set([]);
+        void this.router.navigateByUrl(`${this.baseRoute()}/subjects`);
+        return;
+      }
+
+      this.toastService.error(
+        editingId ? 'No se pudo guardar' : 'No se pudo crear',
+        result.message ?? 'Verifica los datos e intenta nuevamente.',
+      );
+    });
+  }
+
+  protected async deactivateSubject(subject: ManagementSubject): Promise<void> {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Dar de baja materia',
+      message: `${subject.name} dejara de estar activa. Solo es posible si no tiene horarios activos asignados.`,
+      confirmText: 'Dar de baja',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+      icon: 'fa-solid fa-book-open',
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.managementData.deactivateSubject(subject.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Materia dada de baja', 'La materia ya no esta activa.');
+        this.subjects.update((current) =>
+          current.map((item) => (item.id === subject.id ? { ...item, isActive: false } : item)),
+        );
+        return;
+      }
+
+      this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
+    });
+  }
+
+  protected reactivateSubject(subject: ManagementSubject): void {
+    this.managementData.reactivateSubject(subject.id).subscribe((result) => {
+      if (result.success) {
+        this.toastService.success('Materia reactivada', 'La materia vuelve a estar activa.');
+        this.subjects.update((current) =>
+          current.map((item) => (item.id === subject.id ? { ...item, isActive: true } : item)),
         );
         return;
       }
@@ -2744,6 +3048,8 @@ export class ManagementWorkspaceComponent implements OnInit {
       'teacher-detail': 'Perfil del profesor',
       'teacher-attendance': 'Revision de asistencias',
       subjects: 'Materias',
+      'subject-create': 'Nueva materia',
+      'subject-edit': 'Editar materia',
       schedules: 'Horario de clases',
       'schedule-create': 'Nuevo horario',
       'schedule-edit': 'Editar horario',
@@ -2788,7 +3094,11 @@ export class ManagementWorkspaceComponent implements OnInit {
       teachers: 'Consulta docentes, materias asignadas y carga horaria.',
       'teacher-detail': 'Perfil academico y grupos asignados al profesor.',
       'teacher-attendance': 'Revision historica de asistencias por clase.',
-      subjects: 'Materias con profesor, grupo, horario y ubicacion.',
+      subjects: this.isAdmin()
+        ? 'Administra el catalogo de materias: nombre, codigo y estado.'
+        : 'Materias con profesor, grupo, horario y ubicacion.',
+      'subject-create': 'Registra una nueva materia con su nombre y codigo.',
+      'subject-edit': 'Actualiza el nombre, codigo o descripcion de esta materia.',
       schedules: 'Horario semanal de grupos y profesores de la carrera.',
       'schedule-create': 'Registra un nuevo horario de clase con su profesor, grupo y salon.',
       'schedule-edit': 'Actualiza el profesor, grupo, salon u horario de esta clase.',
@@ -2957,6 +3267,24 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected toggleIncidentStudent(studentId: string): void {
     this.selectedIncidentStudentIds.update((current) =>
       current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId],
+    );
+  }
+
+  protected subjectCareersLabel(subject: ManagementSubject): string {
+    if (subject.careers.length === 0) {
+      return 'Sin asignar';
+    }
+
+    return subject.careers.map((career) => career.shortName || career.name).join(', ');
+  }
+
+  protected isSubjectCareerSelected(careerId: string): boolean {
+    return this.selectedSubjectCareerIds().includes(careerId);
+  }
+
+  protected toggleSubjectCareer(careerId: string): void {
+    this.selectedSubjectCareerIds.update((current) =>
+      current.includes(careerId) ? current.filter((id) => id !== careerId) : [...current, careerId],
     );
   }
 
@@ -3367,6 +3695,7 @@ export class ManagementWorkspaceComponent implements OnInit {
     this.selectedScheduleId.set(params.get('scheduleId') ?? '');
     this.selectedSchoolYearId.set(params.get('schoolYearId') ?? '');
     this.selectedCareerId.set(params.get('careerId') ?? '');
+    this.selectedSubjectId.set(params.get('subjectId') ?? '');
     this.selectedAttendanceSettingId.set(params.get('attendanceSettingId') ?? '');
     this.selectedClassroomId.set(params.get('classroomId') ?? '');
     this.auditEntity.set(this.readAuditEntity(params.get('entity')));

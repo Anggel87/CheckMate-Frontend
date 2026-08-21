@@ -43,4 +43,10 @@ export const TUTOR_TEACHER_MENU: NavigationItem[] = [
     route: '/tutor/incidents',
     permission: 'emergencies.view',
   },
+  {
+    label: 'Notificaciones',
+    icon: 'fa-solid fa-bell',
+    route: '/tutor/notifications',
+    permission: 'notifications.view',
+  },
 ];

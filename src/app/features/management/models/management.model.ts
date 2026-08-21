@@ -8,6 +8,8 @@ export type ManagementView =
   | 'teacher-detail'
   | 'teacher-attendance'
   | 'subjects'
+  | 'subject-create'
+  | 'subject-edit'
   | 'schedules'
   | 'schedule-create'
   | 'schedule-edit'
@@ -121,6 +123,12 @@ export interface ManagementTeacher {
   avatarUrl: string;
 }
 
+export interface SubjectCareerSummary {
+  id: string;
+  name: string;
+  shortName: string;
+}
+
 export interface ManagementSubject {
   id: string;
   name: string;
@@ -129,6 +137,18 @@ export interface ManagementSubject {
   teacher: string;
   schedule: string;
   classroom: string;
+  code: string;
+  description: string;
+  isActive: boolean;
+  schedulesCount: number;
+  careers: SubjectCareerSummary[];
+}
+
+export interface SubjectFormPayload {
+  name: string;
+  code: string;
+  description?: string;
+  careerIds?: string[];
 }
 
 export interface ManagementSchedule {

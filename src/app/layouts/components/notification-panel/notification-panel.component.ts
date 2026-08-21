@@ -38,7 +38,7 @@ import { NotificationService } from '../../../core/services/notification.service
                 <a
                   class="notification-item"
                   [class.is-unread]="!notification.read"
-                  [routerLink]="notificationsRoute()"
+                  [routerLink]="notification.route ?? notificationsRoute()"
                   (click)="notificationService.markAsRead(notification.id); open.set(false)"
                 >
                   <span></span>

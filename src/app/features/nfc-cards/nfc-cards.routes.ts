@@ -4,12 +4,9 @@ export const NFC_CARDS_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () =>
-      import('../../shared/components/feature-placeholder/feature-placeholder.component').then(
-        (component) => component.FeaturePlaceholderComponent,
+      import('./pages/nfc-cards-list/nfc-cards-list.component').then(
+        (component) => component.NfcCardsListComponent,
       ),
-    data: {
-      title: 'Tarjetas NFC',
-      description: 'Vincula tarjetas con alumnos y controla su estado.',
-    },
+    data: { topbarTitle: 'Tarjetas NFC' },
   },
 ];

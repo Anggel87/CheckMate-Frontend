@@ -42,6 +42,12 @@ export const TEACHER_MENU: NavigationItem[] = [
     permission: 'incidents.view',
   },
   {
+    label: 'Notificaciones',
+    icon: 'fa-solid fa-bell',
+    route: '/teacher/notifications',
+    permission: 'notifications.view',
+  },
+  {
     label: 'Configuración',
     icon: 'fa-solid fa-gear',
     route: '/teacher/settings',
