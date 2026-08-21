@@ -666,6 +666,24 @@ import {
           @case ('schedules') {
             @if (isAdmin()) {
               <div class="checkmate-card management-table-card">
+                <div class="segmented-control">
+                  <button
+                    type="button"
+                    [class.is-active]="selectedAdminScheduleDay() === 'TODOS'"
+                    (click)="selectedAdminScheduleDay.set('TODOS')"
+                  >
+                    Todos
+                  </button>
+                  @for (day of scheduleDays(); track day) {
+                    <button
+                      type="button"
+                      [class.is-active]="day.toUpperCase() === selectedAdminScheduleDay()"
+                      (click)="selectedAdminScheduleDay.set(day.toUpperCase())"
+                    >
+                      {{ day }}
+                    </button>
+                  }
+                </div>
                 <div class="management-table-wrap">
                   <table class="management-table">
                     <thead>
@@ -683,7 +701,7 @@ import {
                       @if (schedulesLoading()) {
                         <tr><td colspan="7">Cargando horarios...</td></tr>
                       } @else {
-                        @for (schedule of schedules(); track schedule.id) {
+                        @for (schedule of adminSchedulesForSelectedDay(); track schedule.id) {
                           <tr>
                             <td>{{ schedule.day }}</td>
                             <td>{{ schedule.time }}</td>
@@ -1728,48 +1746,83 @@ import {
           <div class="management-form__grid">
             <label class="checkmate-form-field">
               <span class="checkmate-label">Ciclo escolar</span>
-              <select class="checkmate-select" formControlName="schoolYearId">
+              <select
+                class="checkmate-select"
+                formControlName="schoolYearId"
+                [class.is-invalid]="scheduleForm.controls.schoolYearId.touched && scheduleForm.controls.schoolYearId.invalid"
+              >
                 <option value="" disabled>Selecciona un ciclo</option>
                 @for (year of schoolYears(); track year.id) {
                   <option [value]="year.id">{{ year.name }}</option>
                 }
               </select>
+              @if (scheduleForm.controls.schoolYearId.touched && scheduleForm.controls.schoolYearId.invalid) {
+                <p class="checkmate-field-error">Selecciona un ciclo escolar.</p>
+              }
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Grupo</span>
-              <select class="checkmate-select" formControlName="groupId">
+              <select
+                class="checkmate-select"
+                formControlName="groupId"
+                [class.is-invalid]="scheduleForm.controls.groupId.touched && scheduleForm.controls.groupId.invalid"
+              >
                 <option value="" disabled>Selecciona un grupo</option>
                 @for (group of snapshot().groups; track group.id) {
                   <option [value]="group.id">{{ group.label }} - {{ group.career }}</option>
                 }
               </select>
+              @if (scheduleForm.controls.groupId.touched && scheduleForm.controls.groupId.invalid) {
+                <p class="checkmate-field-error">Selecciona un grupo.</p>
+              }
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Materia</span>
-              <select class="checkmate-select" formControlName="subjectId">
+              <select
+                class="checkmate-select"
+                formControlName="subjectId"
+                [class.is-invalid]="scheduleForm.controls.subjectId.touched && scheduleForm.controls.subjectId.invalid"
+              >
                 <option value="" disabled>Selecciona una materia</option>
                 @for (subject of snapshot().subjects; track subject.id) {
                   <option [value]="subject.id">{{ subject.name }}</option>
                 }
               </select>
+              @if (scheduleForm.controls.subjectId.touched && scheduleForm.controls.subjectId.invalid) {
+                <p class="checkmate-field-error">Selecciona una materia.</p>
+              }
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Profesor</span>
-              <select class="checkmate-select" formControlName="teacherId">
+              <select
+                class="checkmate-select"
+                formControlName="teacherId"
+                [class.is-invalid]="scheduleForm.controls.teacherId.touched && scheduleForm.controls.teacherId.invalid"
+              >
                 <option value="" disabled>Selecciona un profesor</option>
                 @for (teacher of snapshot().teachers; track teacher.id) {
                   <option [value]="teacher.id">{{ teacher.name }}</option>
                 }
               </select>
+              @if (scheduleForm.controls.teacherId.touched && scheduleForm.controls.teacherId.invalid) {
+                <p class="checkmate-field-error">Selecciona un profesor.</p>
+              }
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Salon</span>
-              <select class="checkmate-select" formControlName="classroomId">
+              <select
+                class="checkmate-select"
+                formControlName="classroomId"
+                [class.is-invalid]="scheduleForm.controls.classroomId.touched && scheduleForm.controls.classroomId.invalid"
+              >
                 <option value="" disabled>Selecciona un salon</option>
                 @for (classroom of classrooms(); track classroom.id) {
                   <option [value]="classroom.id">{{ classroom.name }} - {{ classroom.building }}</option>
                 }
               </select>
+              @if (scheduleForm.controls.classroomId.touched && scheduleForm.controls.classroomId.invalid) {
+                <p class="checkmate-field-error">Selecciona un salon.</p>
+              }
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Dia</span>
@@ -1781,11 +1834,27 @@ import {
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Hora de inicio</span>
-              <input class="checkmate-input" type="time" formControlName="startTime" />
+              <input
+                class="checkmate-input"
+                type="time"
+                formControlName="startTime"
+                [class.is-invalid]="scheduleForm.controls.startTime.touched && scheduleForm.controls.startTime.invalid"
+              />
+              @if (scheduleForm.controls.startTime.touched && scheduleForm.controls.startTime.invalid) {
+                <p class="checkmate-field-error">Indica la hora de inicio.</p>
+              }
             </label>
             <label class="checkmate-form-field">
               <span class="checkmate-label">Hora de fin</span>
-              <input class="checkmate-input" type="time" formControlName="endTime" />
+              <input
+                class="checkmate-input"
+                type="time"
+                formControlName="endTime"
+                [class.is-invalid]="scheduleForm.controls.endTime.touched && scheduleForm.controls.endTime.invalid"
+              />
+              @if (scheduleForm.controls.endTime.touched && scheduleForm.controls.endTime.invalid) {
+                <p class="checkmate-field-error">Indica la hora de fin.</p>
+              }
             </label>
           </div>
           <footer class="management-form__footer">
@@ -2009,6 +2078,7 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected readonly schedules = signal<ManagementSchedule[]>([]);
   protected readonly schedulesLoading = signal(false);
   protected readonly selectedScheduleDay = signal('LUNES');
+  protected readonly selectedAdminScheduleDay = signal('TODOS');
   protected readonly scheduleDetail = signal<ManagementSchedule | null>(null);
   protected readonly scheduleDetailLoading = signal(false);
   protected readonly selectedScheduleId = signal('');
@@ -2880,6 +2950,11 @@ export class ManagementWorkspaceComponent implements OnInit {
   protected submitScheduleForm(): void {
     if (this.scheduleForm.invalid || this.submitting()) {
       this.scheduleForm.markAllAsTouched();
+
+      if (this.scheduleForm.invalid) {
+        this.toastService.error('Faltan datos', 'Completa todos los campos del horario antes de guardar.');
+      }
+
       return;
     }
 
@@ -3320,6 +3395,16 @@ export class ManagementWorkspaceComponent implements OnInit {
 
   protected directorSchedulesForSelectedDay(): ManagementSchedule[] {
     return this.snapshot().schedules.filter((schedule) => schedule.day.toUpperCase() === this.selectedScheduleDay());
+  }
+
+  protected adminSchedulesForSelectedDay(): ManagementSchedule[] {
+    const day = this.selectedAdminScheduleDay();
+
+    if (day === 'TODOS') {
+      return this.schedules();
+    }
+
+    return this.schedules().filter((schedule) => schedule.day.toUpperCase() === day);
   }
 
   protected attendanceRows() {
