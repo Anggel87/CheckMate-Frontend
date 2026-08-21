@@ -1743,6 +1743,16 @@ import {
 
       <ng-template #scheduleFormTemplate let-editing="editing">
         <form class="checkmate-card management-form" [formGroup]="scheduleForm" (ngSubmit)="submitScheduleForm()">
+          <div class="management-form__test-tools">
+            <button type="button" class="btn-checkmate btn-checkmate-secondary" (click)="fillScheduleNow()">
+              <i class="fa-regular fa-clock" aria-hidden="true"></i>
+              Probar ahora
+            </button>
+            <span class="management-form__test-tools-hint">
+              Rellena dia y hora con el momento actual (+10 min) para probar el check-in rapido. Revisa y guarda
+              normalmente.
+            </span>
+          </div>
           <div class="management-form__grid">
             <label class="checkmate-form-field">
               <span class="checkmate-label">Ciclo escolar</span>
@@ -2945,6 +2955,27 @@ export class ManagementWorkspaceComponent implements OnInit {
 
       this.toastService.error('No se pudo completar', result.message ?? 'Intenta nuevamente.');
     });
+  }
+
+  protected fillScheduleNow(): void {
+    const dayIndexToValue = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
+    const now = new Date();
+    let end = new Date(now.getTime() + 10 * 60 * 1000);
+
+    if (end.getDate() !== now.getDate()) {
+      end = new Date(now);
+      end.setHours(23, 59, 0, 0);
+    }
+
+    this.scheduleForm.patchValue({
+      dayOfWeek: dayIndexToValue[now.getDay()],
+      startTime: this.formatHoursMinutes(now),
+      endTime: this.formatHoursMinutes(end),
+    });
+  }
+
+  private formatHoursMinutes(date: Date): string {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   }
 
   protected submitScheduleForm(): void {

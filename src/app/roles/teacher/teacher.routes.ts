@@ -34,6 +34,15 @@ export const TEACHER_ROUTES: Routes = [
           ),
       },
       {
+        path: 'schedule/:scheduleId/attendance-setting',
+        canActivate: [permissionGuard],
+        data: { permission: 'schedule.view', topbarTitle: 'Tolerancia de asistencia' },
+        loadComponent: () =>
+          import('../../features/schedules/pages/teacher-attendance-setting/teacher-attendance-setting.component').then(
+            (component) => component.TeacherAttendanceSettingComponent,
+          ),
+      },
+      {
         path: 'students',
         canActivate: [permissionGuard],
         data: { permission: 'students.view' },

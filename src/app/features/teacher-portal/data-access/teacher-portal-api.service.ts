@@ -39,6 +39,18 @@ export interface TeacherClassView {
   sessionId?: string;
 }
 
+export interface TeacherAttendanceSettingView {
+  id: string | null;
+  scheduleId: string;
+  presentToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  isActive: boolean;
+  subject: string;
+  group: string;
+  day: string;
+  time: string;
+}
+
 export interface TeacherProfileView {
   id: string;
   name: string;
@@ -306,6 +318,31 @@ export class TeacherPortalApiService {
 
   getTodayClasses(): Observable<TeacherClassView[]> {
     return this.api.getCollection('/profesor/schedule/today', (item) => this.toClass(item));
+  }
+
+  getAttendanceSetting(scheduleId: string): Observable<TeacherAttendanceSettingView> {
+    return this.api
+      .get<unknown>(`/profesor/schedule/${scheduleId}/attendance-setting`)
+      .pipe(map((response) => this.toAttendanceSetting(unwrapData(response))));
+  }
+
+  updateAttendanceSetting(
+    scheduleId: string,
+    presentToleranceMinutes: number,
+    lateToleranceMinutes: number,
+  ): Observable<TeacherAttendanceSettingView> {
+    return this.api
+      .put<unknown>(`/profesor/schedule/${scheduleId}/attendance-setting`, {
+        present_tolerance_minutes: presentToleranceMinutes,
+        late_tolerance_minutes: lateToleranceMinutes,
+      })
+      .pipe(map((response) => this.toAttendanceSetting(unwrapData(response))));
+  }
+
+  resetAttendanceSetting(scheduleId: string): Observable<TeacherAttendanceSettingView> {
+    return this.api
+      .delete<unknown>(`/profesor/schedule/${scheduleId}/attendance-setting`)
+      .pipe(map((response) => this.toAttendanceSetting(unwrapData(response))));
   }
 
   getGroups(): Observable<TeacherGroupView[]> {
@@ -636,6 +673,23 @@ export class TeacherPortalApiService {
       status,
       countdown: status === 'active' ? 'En curso' : undefined,
       sessionId: readString(record, 'session_id'),
+    };
+  }
+
+  private toAttendanceSetting(value: unknown): TeacherAttendanceSettingView {
+    const record = toRecord(value);
+    const schedule = toRecord(record?.['schedule']);
+
+    return {
+      id: readString(record, 'id') || null,
+      scheduleId: readFirstString(schedule, ['id'], readString(record, 'schedule_id')),
+      presentToleranceMinutes: readNumber(record, 'present_tolerance_minutes', 10),
+      lateToleranceMinutes: readNumber(record, 'late_tolerance_minutes', 30),
+      isActive: readBooleanLike(record, 'is_active'),
+      subject: readString(schedule, 'subject'),
+      group: readString(schedule, 'group'),
+      day: readString(schedule, 'day_of_week'),
+      time: `${readString(schedule, 'start_time')} - ${readString(schedule, 'end_time')}`,
     };
   }
 

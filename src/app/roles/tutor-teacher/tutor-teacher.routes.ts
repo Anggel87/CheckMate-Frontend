@@ -91,6 +91,15 @@ export const TUTOR_TEACHER_ROUTES: Routes = [
       },
       { path: 'schedules', pathMatch: 'full', redirectTo: 'schedule' },
       {
+        path: 'schedule/:scheduleId/attendance-setting',
+        canActivate: [permissionGuard],
+        data: { permission: 'schedule.view', topbarTitle: 'Tolerancia de asistencia' },
+        loadComponent: () =>
+          import(
+            '../../features/schedules/pages/teacher-attendance-setting/teacher-attendance-setting.component'
+          ).then((component) => component.TeacherAttendanceSettingComponent),
+      },
+      {
         path: 'attendance',
         canActivate: [permissionGuard],
         data: { permission: 'attendance.view' },

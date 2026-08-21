@@ -92,6 +92,13 @@ interface NearestClassView {
                     <i class="fa-regular fa-eye" aria-hidden="true"></i>
                   </a>
                 }
+                <a
+                  class="icon-button"
+                  [routerLink]="attendanceSettingRoute(classItem)"
+                  [attr.aria-label]="'Configurar tolerancia de asistencia de ' + classItem.subject"
+                >
+                  <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                </a>
               </article>
             } @empty {
               <article class="teacher-card">
@@ -211,6 +218,11 @@ export class TeacherTodaySubjectsComponent {
     return this.router.url.startsWith('/tutor')
       ? ['/tutor/students']
       : ['/teacher/groups', classItem.groupId, 'students'];
+  }
+
+  protected attendanceSettingRoute(classItem: TeacherClassView): unknown[] {
+    const prefix = this.router.url.startsWith('/tutor') ? '/tutor' : '/teacher';
+    return [prefix, 'schedule', classItem.scheduleId, 'attendance-setting'];
   }
 
   protected nextClass(): TeacherClassView | undefined {

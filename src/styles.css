@@ -1091,6 +1091,12 @@ app-root {
   margin: 0;
 }
 
+.teacher-field-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--checkmate-text-secondary);
+}
+
 .form-errors {
   padding: 12px;
   background: var(--checkmate-danger-soft);
@@ -7801,8 +7807,25 @@ body {
 }
 
 .management-form__full,
-.management-form__footer {
+.management-form__footer,
+.management-form__test-tools {
   grid-column: 1 / -1;
+}
+
+.management-form__test-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--checkmate-background);
+  border: 1px dashed rgba(210, 210, 215, 0.9);
+  border-radius: var(--checkmate-radius-md);
+}
+
+.management-form__test-tools-hint {
+  font-size: 12px;
+  color: var(--checkmate-text-secondary);
 }
 
 .management-form__aside {
